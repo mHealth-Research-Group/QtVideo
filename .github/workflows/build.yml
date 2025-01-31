@@ -29,7 +29,9 @@ jobs:
     - name: Build with PyInstaller
       run: |
         pyinstaller --name qtwebscrub --windowed --onedir main.py
-        mv dist/qtwebscrub dist/qtwebscrub.app
+        mv dist/qtwebscrub dist/qtwebscrub.app/Contents/MacOS
+        mkdir -p dist/qtwebscrub.app/Contents/MacOS
+        mv dist/qtwebscrub dist/qtwebscrub.app/Contents/MacOS
         
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
