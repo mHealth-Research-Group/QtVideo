@@ -1,0 +1,40 @@
+stages:
+  - build
+
+build-windows:
+  stage: build
+  tags:
+    - windows
+  script:
+    - python -m pip install --upgrade pip
+    - pip install PyQt6 PyInstaller
+    - pip install -r requirements.txt
+    - pyinstaller --name qtwebscrub --windowed --onefile main.py
+  artifacts:
+    paths:
+      - dist/qtwebscrub.exe
+
+build-macos:
+  stage: build
+  tags:
+    - macos
+  script:
+    - python -m pip install --upgrade pip
+    - pip install PyQt6 PyInstaller
+    - pip install -r requirements.txt
+    - pyinstaller --name qtwebscrub --windowed --onefile main.py
+    - brew install create-dmg
+    - create-dmg \
+        --volname "QTWebScrub" \
+        --volicon "icon.icns" \
+        --window-pos 200 120 \
+        --window-size 600 300 \
+        --icon-size 100 \
+        --icon "qtwebscrub.app" 175 120 \
+        --hide-extension "qtwebscrub.app" \
+        --app-drop-link 425 120 \
+        "dist/QTWebScrub.dmg" \
+        "dist/qtwebscrub.app"
+  artifacts:
+    paths:
+      - dist/QTWebScrub.dmg
