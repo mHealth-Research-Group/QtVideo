@@ -28,6 +28,7 @@ jobs:
     - name: Build with PyInstaller
       run: |
         pyinstaller --name qtwebscrub --windowed --onedir main.py
+        mv dist/qtwebscrub dist/qtwebscrub.app
         
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
@@ -67,8 +68,8 @@ jobs:
           --window-pos 200 120 \
           --window-size 600 300 \
           --icon-size 100 \
-          --icon "qtwebscrub.app" 175 120 \
-          --hide-extension "qtwebscrub.app" \
+          --icon "dist/qtwebscrub.app" 175 120 \
+          --hide-extension "dist/qtwebscrub.app" \
           --app-drop-link 425 120 \
           "dist/QTWebScrub.dmg" \
           "dist/qtwebscrub.app"
