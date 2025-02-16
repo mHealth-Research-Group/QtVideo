@@ -5,6 +5,32 @@ from models import TimelineAnnotation
 class AnnotationManager:
     def __init__(self, app):
         self.app = app
+        self.default_labels = {
+            "posture": "",
+            "hlb": [],
+            "pa_type": "",
+            "behavioral_params": [],
+            "exp_situation": "",
+            "special_notes": ""
+        }
+        self.posture_colors = {}  # Store posture-to-color mapping
+        
+    def get_posture_color(self, posture):
+        """Get a consistent color for a given posture"""
+        if posture not in self.posture_colors:
+            # Generate a new random color for this posture
+            import random
+            while True:
+                # Generate vibrant colors by using higher ranges
+                r = random.randint(100, 255)
+                g = random.randint(100, 255)
+                b = random.randint(100, 255)
+                color = f"#{r:02x}{g:02x}{b:02x}"
+                # Ensure we don't accidentally reuse a color
+                if color not in self.posture_colors.values():
+                    break
+            self.posture_colors[posture] = color
+        return self.posture_colors[posture]
         
     def check_overlap(self, start_time, end_time, exclude_annotation=None):
         """Check if a time range overlaps with any existing annotations"""
@@ -37,6 +63,16 @@ class AnnotationManager:
             if self.check_overlap(current_time, current_time):
                 return
             self.app.current_annotation = TimelineAnnotation(start_time=current_time)
+            # Apply default labels if they exist
+            if any(v for v in self.default_labels.values()):
+                self.app.current_annotation.update_comment_body(
+                    posture=self.default_labels["posture"],
+                    hlb=self.default_labels["hlb"],
+                    pa_type=self.default_labels["pa_type"],
+                    behavioral_params=self.default_labels["behavioral_params"],
+                    exp_situation=self.default_labels["exp_situation"],
+                    special_notes=self.default_labels["special_notes"]
+                )
             # Update timeline position to sync both timelines
             self.app.setPosition(self.app.media_player.position())
         else:
@@ -64,21 +100,23 @@ class AnnotationManager:
             self.app.setPosition(self.app.media_player.position())
             
     def editAnnotation(self):
-        """Edit the annotation at current timeline position"""
+        """Edit the annotation at current timeline position or pre-set labels for next annotation"""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_idx = self.get_current_annotation_index(sorted_annotations)
         
-        if current_idx != -1:
-            annotation = sorted_annotations[current_idx]
-            dialog = AnnotationDialog(annotation, self.app)
-            if dialog.exec():
-                posture = next(item.text() for item in dialog.posture_list.selectedItems())
-                hlb = [item.text() for item in dialog.hlb_list.selectedItems()]
-                pa_type = next(item.text() for item in dialog.pa_list.selectedItems())
-                behavioral_params = [item.text() for item in dialog.bp_list.selectedItems()]
-                exp_situation = next(item.text() for item in dialog.es_list.selectedItems())
-                special_notes = dialog.notes_edit.text()
-                
+        # Create dialog with existing annotation or None for new labels
+        annotation = sorted_annotations[current_idx] if current_idx != -1 else None
+        dialog = AnnotationDialog(annotation, self.app)
+        if dialog.exec():
+            posture = next(item.text() for item in dialog.posture_list.selectedItems())
+            hlb = [item.text() for item in dialog.hlb_list.selectedItems()]
+            pa_type = next(item.text() for item in dialog.pa_list.selectedItems())
+            behavioral_params = [item.text() for item in dialog.bp_list.selectedItems()]
+            exp_situation = next(item.text() for item in dialog.es_list.selectedItems())
+            special_notes = dialog.notes_edit.text()
+            
+            if annotation:
+                # Update existing annotation
                 annotation.update_comment_body(
                     posture=posture,
                     hlb=hlb,
@@ -87,6 +125,16 @@ class AnnotationManager:
                     exp_situation=exp_situation,
                     special_notes=special_notes
                 )
+            else:
+                # Store as default values for next annotation
+                self.default_labels.update({
+                    "posture": posture,
+                    "hlb": hlb,
+                    "pa_type": pa_type,
+                    "behavioral_params": behavioral_params,
+                    "exp_situation": exp_situation,
+                    "special_notes": special_notes
+                })
 
     def cancelAnnotation(self):
         """Cancel the current annotation in progress"""
@@ -157,15 +205,19 @@ class AnnotationManager:
         
         if current_idx > 0:
             current_annotation = sorted_annotations[current_idx]
-            prev_annotation = sorted_annotations[current_idx - 1]
-            
+            prev_annotation = sorted_annotations[current_idx - 1]            
             # Check if annotations are adjacent (within small threshold or exactly at boundary)
             gap = abs(prev_annotation.end_time - current_annotation.start_time)
             if gap > 0.001:  # Use a smaller threshold to handle floating point precision
                 QMessageBox.warning(self.app, "Invalid Merge", "Can only merge adjacent annotations.")
                 return
             
-            # Create the merged annotation before removing the originals
+            # Remove original annotations first
+            del self.app.annotations[current_idx]
+            del self.app.annotations[current_idx - 1]
+        
+
+            # Create the merged annotation
             merged_annotation = TimelineAnnotation(
                 start_time=prev_annotation.start_time,
                 end_time=current_annotation.end_time
@@ -178,19 +230,16 @@ class AnnotationManager:
             elif current_annotation.comments:
                 merged_annotation.copy_comments_from(current_annotation)
             
-            # First add the merged annotation
+            # Add the merged annotation
             self.app.annotations.append(merged_annotation)
-            
-            # Then remove the original annotations
-            # Remove in reverse order (current then prev) to maintain correct indices
-            self.app.annotations.remove(current_annotation)
-            self.app.annotations.remove(prev_annotation)
             
             # Sort annotations to maintain order
             self.app.annotations.sort(key=lambda x: x.start_time)
             
             # Update timeline
             self.app.updateAnnotationTimeline()
+
+            self.app.timeline_widget.update()
             
             # Update position to trigger timeline sync
             self.app.setPosition(self.app.media_player.position())
@@ -228,8 +277,8 @@ class AnnotationManager:
             
             # Then remove the original annotations
             # Remove in reverse order (next then current) to maintain correct indices
-            self.app.annotations.remove(next_annotation)
-            self.app.annotations.remove(current_annotation)
+            del self.app.annotations[current_idx + 1]
+            del self.app.annotations[current_idx]
             
             # Sort annotations to maintain order
             self.app.annotations.sort(key=lambda x: x.start_time)

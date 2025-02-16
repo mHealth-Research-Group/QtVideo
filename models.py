@@ -56,3 +56,6 @@ class TimelineAnnotation:
             {"category": "Special Notes", "selectedValue": special_notes}
         ]
         self.comments[0]["body"] = json.dumps(comment_data)
+
+    def __str__(self):
+        return f"Annotation {self.id}: {self.start_time} - {self.end_time}"

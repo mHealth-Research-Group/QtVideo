@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                            QPushButton, QWidget, QDialogButtonBox, QComboBox,
                            QGridLayout, QFrame, QScrollArea, QLayout)
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint, QTimer
+from PyQt6.QtGui import QKeyEvent
 import json
 import csv
 
@@ -257,6 +258,7 @@ class SelectionWidget(QWidget):
 class AnnotationDialog(QDialog):
     def __init__(self, annotation=None, parent=None):
         super().__init__(parent)
+        self.parent = parent
         self.setWindowTitle("Category Choices")
         self.setModal(True)
         self.setMinimumWidth(1200)
@@ -504,27 +506,47 @@ class AnnotationDialog(QDialog):
         dialog_layout.setContentsMargins(0, 0, 0, 0)
         dialog_layout.addWidget(main_scroll)
         
-        # Set values if annotation provided
+        # Set values from annotation or default labels
         if annotation:
             try:
                 comment_data = json.loads(annotation.comments[0]["body"])
-                for item in comment_data:
-                    if item["category"] == "POSTURE":
-                        self.posture_selection.handle_selection(item["selectedValue"])
-                    elif item["category"] == "HIGH LEVEL BEHAVIOR":
-                        for value in item["selectedValue"]:
-                            self.hlb_selection.handle_selection(value)
-                    elif item["category"] == "PA TYPE":
-                        self.pa_selection.handle_selection(item["selectedValue"])
-                    elif item["category"] == "Behavioral Parameters":
-                        for value in item["selectedValue"]:
-                            self.bp_selection.handle_selection(value)
-                    elif item["category"] == "Experimental situation":
-                        self.es_selection.handle_selection(item["selectedValue"])
-                    elif item["category"] == "Special Notes":
-                        self.notes_edit.setText(item["selectedValue"])
+                self._set_values_from_data(comment_data)
             except Exception as e:
                 print(f"Error parsing annotation data: {str(e)}")
+        elif hasattr(parent, "annotation_manager") and any(v for v in parent.annotation_manager.default_labels.values()):
+            # Use default labels from annotation manager if available
+            default_labels = parent.annotation_manager.default_labels
+            comment_data = [
+                {"category": "POSTURE", "selectedValue": default_labels["posture"]},
+                {"category": "HIGH LEVEL BEHAVIOR", "selectedValue": default_labels["hlb"]},
+                {"category": "PA TYPE", "selectedValue": default_labels["pa_type"]},
+                {"category": "Behavioral Parameters", "selectedValue": default_labels["behavioral_params"]},
+                {"category": "Experimental situation", "selectedValue": default_labels["exp_situation"]},
+                {"category": "Special Notes", "selectedValue": default_labels["special_notes"]}
+            ]
+            self._set_values_from_data(comment_data)
+
+    def _set_values_from_data(self, comment_data):
+        """Helper method to set values from comment data"""
+        for item in comment_data:
+            if item["category"] == "POSTURE" and item["selectedValue"]:
+                self.posture_selection.handle_selection(item["selectedValue"])
+            elif item["category"] == "HIGH LEVEL BEHAVIOR":
+                values = item["selectedValue"] if isinstance(item["selectedValue"], list) else []
+                for value in values:
+                    if value:
+                        self.hlb_selection.handle_selection(value)
+            elif item["category"] == "PA TYPE" and item["selectedValue"]:
+                self.pa_selection.handle_selection(item["selectedValue"])
+            elif item["category"] == "Behavioral Parameters":
+                values = item["selectedValue"] if isinstance(item["selectedValue"], list) else []
+                for value in values:
+                    if value:
+                        self.bp_selection.handle_selection(value)
+            elif item["category"] == "Experimental situation" and item["selectedValue"]:
+                self.es_selection.handle_selection(item["selectedValue"])
+            elif item["category"] == "Special Notes" and item["selectedValue"]:
+                self.notes_edit.setText(item["selectedValue"])
 
     def getSelectedValues(self, selection_widget):
         """Helper method to get selected values from a selection widget"""
@@ -566,6 +588,13 @@ class AnnotationDialog(QDialog):
         values = selection_widget.selected_values
         return MockList(values if values else [selection_widget.combo.itemText(0)])
             
+    def keyPressEvent(self, event: QKeyEvent):
+        # Handle number keys for category selection (1-5)
+        if event.key() >= Qt.Key.Key_1 and event.key() <= Qt.Key.Key_5:
+            index = event.key() - Qt.Key.Key_1  # Convert key to 0-based index
+            self.selectCategoryByIndex(index)
+        super().keyPressEvent(event)
+
     def selectCategoryByIndex(self, index):
         """Select the appropriate category combo based on numeric key index (0-4)"""
         category_combos = [
@@ -578,8 +607,9 @@ class AnnotationDialog(QDialog):
         
         if 0 <= index < len(category_combos):
             target_combo = category_combos[index]
-            target_combo.setFocus()
+            # First show the popup, then manage focus
             target_combo.showPopup()
+            QTimer.singleShot(0, lambda: self.setFocus())
                 
     def load_categories(self):
         """Load categories from the CSV file"""
