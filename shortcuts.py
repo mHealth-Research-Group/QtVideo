@@ -102,14 +102,16 @@ class ShortcutManager:
         self.app.addAction(self.toggle_dialog)
 
     def setPlaybackRate(self, rate):
-        """Set the playback rate directly"""
+        """Set the playback rate directly for both players"""
         self.app.media_player.setPlaybackRate(rate)
+        self.app.media_player_preview.setPlaybackRate(rate)
 
     def adjustPlaybackRate(self, delta):
-        """Adjust the playback rate by the given delta"""
+        """Adjust the playback rate by the given delta for both players"""
         current_rate = self.app.media_player.playbackRate()
         new_rate = max(0.25, current_rate + delta)  # Ensure rate doesn't go below 0.25
         self.app.media_player.setPlaybackRate(new_rate)
+        self.app.media_player_preview.setPlaybackRate(new_rate)
 
     def skipTime(self, ms):
         """Skip forward or backward by the specified number of milliseconds"""

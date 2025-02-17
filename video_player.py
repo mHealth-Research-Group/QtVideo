@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                           QSlider, QPushButton, QFileDialog, QLabel, QMessageBox)
+                           QSlider, QPushButton, QFileDialog, QLabel, QMessageBox,
+                           QMenu)
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
-from PyQt6.QtGui import QAction, QKeyEvent
+from PyQt6.QtGui import QAction, QKeyEvent, QTransform
 
 from models import TimelineAnnotation
 from widgets import TimelineWidget
@@ -322,9 +323,14 @@ class VideoPlayerApp(QMainWindow):
         layout.addWidget(shortcuts_container)
         
         # Controls section
-        controls_layout = QHBoxLayout()
-        button_container = QWidget()
-        button_container.setStyleSheet("""
+        controls_container = QWidget()
+        controls_container.setStyleSheet("""
+            QWidget {
+                background-color: #1a1a1a;
+                border: 1px solid #3a3a3a;
+                border-radius: 6px;
+                margin: 8px;
+            }
             QPushButton {
                 padding: 8px 16px;
                 background-color: #4a90e2;
@@ -340,41 +346,118 @@ class VideoPlayerApp(QMainWindow):
                 background-color: #2a5f9e;
             }
         """)
-        button_layout = QHBoxLayout(button_container)
-        button_layout.setSpacing(10)
+        controls_layout = QHBoxLayout(controls_container)
+        controls_layout.setSpacing(10)
+        controls_layout.setContentsMargins(12, 8, 12, 8)
         
-        self.open_button = QPushButton("Open Video")
-        self.open_button.setToolTip("Open a video file for annotation")
-        self.open_button.clicked.connect(self.openFile)
-        
+        # Left side controls
+        left_controls = QWidget()
+        left_layout = QHBoxLayout(left_controls)
+        left_layout.setSpacing(10)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+
         self.play_pause_button = QPushButton("Play")
         self.play_pause_button.setToolTip("Play/Pause the video")
         self.play_pause_button.clicked.connect(self.togglePlayPause)
+
+        # Speed indicator label
+        self.speed_label = QLabel("1.0x")
+        self.speed_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                padding: 8px;
+                background-color: #2a2a2a;
+                border-radius: 4px;
+                min-width: 50px;
+                text-align: center;
+            }
+        """)
+
+        left_layout.addWidget(self.play_pause_button)
+        left_layout.addWidget(self.speed_label)
+
+        # Right side controls
+        right_controls = QWidget()
+        right_layout = QHBoxLayout(right_controls)
+        right_layout.setSpacing(10)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.open_button = QPushButton("Open Video")
+        self.open_button.setToolTip("Open a video file for annotation")
+        self.open_button.clicked.connect(self.openFile)
+
+        # Gear button with menu
+        self.gear_button = QPushButton("⚙")
+        self.gear_button.setToolTip("Settings")
+        self.gear_button.setStyleSheet("""
+            QPushButton {
+                padding: 8px 12px;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                min-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #357abd;
+            }
+            QPushButton:pressed {
+                background-color: #2a5f9e;
+            }
+        """)
         
-        self.save_json_button = QPushButton("Export Labels")
-        self.save_json_button.setToolTip("Export annotations to ZIP file")
-        self.save_json_button.clicked.connect(self.saveAnnotations)
-        self.save_json_button.hide()  # Initially hidden
+        # Create settings menu
+        self.settings_menu = QMenu(self)
+        self.settings_menu.setStyleSheet("""
+            QMenu {
+                background-color: #2b2b2b;
+                border: 1px solid #3a3a3a;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                color: white;
+            }
+            QMenu::item:selected {
+                background-color: #4a90e2;
+            }
+        """)
         
-        self.load_json_button = QPushButton("Load JSON")
-        self.load_json_button.setToolTip("Load annotations from JSON file")
-        self.load_json_button.clicked.connect(self.loadAnnotations)
-        self.load_json_button.hide()  # Initially hidden
+        # Add menu actions
+        self.settings_menu.addAction("Load JSON", self.loadAnnotations)
+        self.settings_menu.addAction("Export Labels", self.saveAnnotations)
+        self.settings_menu.addAction("New Video", self.openFile)
+        self.settings_menu.addAction("Rotate Video", self.rotateVideo)
         
-        for button in [self.open_button, self.play_pause_button, self.save_json_button, self.load_json_button]:
-            button_layout.addWidget(button)
+        # Connect gear button to show menu at button position
+        self.gear_button.clicked.connect(self.showSettingsMenu)
         
-        controls_layout.addWidget(button_container)
-        layout.addLayout(controls_layout)
+        right_layout.addWidget(self.open_button)
+        right_layout.addWidget(self.gear_button)
+
+        # Add left and right controls to main controls layout
+        controls_layout.addWidget(left_controls)
+        controls_layout.addStretch()
+        controls_layout.addWidget(right_controls)
+
+        layout.addWidget(controls_container)
         
         # Connect signals for syncing media players
         self.media_player.playbackStateChanged.connect(self.updatePlayPauseButton)
         self.media_player.positionChanged.connect(self.positionChanged)
         self.media_player.durationChanged.connect(self.durationChanged)
+        self.media_player.playbackRateChanged.connect(self.updateSpeedLabel)
 
         self.timeline.sliderReleased.connect(
             lambda: self._sync_preview_position(self.timeline.value())
         )
+
+    def showSettingsMenu(self):
+        # Show menu at the bottom right of the gear button
+        pos = self.gear_button.mapToGlobal(self.gear_button.rect().bottomRight())
+        # Adjust position to align with right edge
+        pos.setX(pos.x() - self.settings_menu.sizeHint().width())
+        self.settings_menu.exec(pos)
             
     def _sync_preview_position(self, position):
         """
@@ -437,10 +520,24 @@ class VideoPlayerApp(QMainWindow):
             
             self.updatePlayPauseButton()
             
-            # Show JSON buttons after video is loaded
-            self.save_json_button.show()
-            self.load_json_button.show()
+    def rotateVideo(self):
+        if hasattr(self, 'video_widget'):
+            # Store rotation in a class variable if it doesn't exist
+            if not hasattr(self, 'current_rotation'):
+                self.current_rotation = 0
             
+            # Update rotation
+            self.current_rotation = (self.current_rotation + 90) % 360
+            
+            # Apply rotation using orientation
+            self.video_widget.setOrientation(self.current_rotation)
+            self.video_widget_preview.setOrientation(self.current_rotation)
+
+    def updateSpeedLabel(self):
+        if hasattr(self, 'media_player'):
+            speed = self.media_player.playbackRate()
+            self.speed_label.setText(f"{speed:.1f}x")
+
     def togglePlayPause(self):
         if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.media_player.pause()
