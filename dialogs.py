@@ -589,7 +589,6 @@ class AnnotationDialog(QDialog):
         return MockList(values if values else [selection_widget.combo.itemText(0)])
             
     def keyPressEvent(self, event: QKeyEvent):
-        # Handle number keys for category selection (1-5)
         if event.key() >= Qt.Key.Key_1 and event.key() <= Qt.Key.Key_5:
             index = event.key() - Qt.Key.Key_1  # Convert key to 0-based index
             self.selectCategoryByIndex(index)
@@ -607,7 +606,6 @@ class AnnotationDialog(QDialog):
         
         if 0 <= index < len(category_combos):
             target_combo = category_combos[index]
-            # First show the popup, then manage focus
             target_combo.showPopup()
             QTimer.singleShot(0, lambda: self.setFocus())
                 

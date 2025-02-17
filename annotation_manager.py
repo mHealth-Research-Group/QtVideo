@@ -13,20 +13,17 @@ class AnnotationManager:
             "exp_situation": "",
             "special_notes": ""
         }
-        self.posture_colors = {}  # Store posture-to-color mapping
+        self.posture_colors = {}
         
     def get_posture_color(self, posture):
         """Get a consistent color for a given posture"""
         if posture not in self.posture_colors:
-            # Generate a new random color for this posture
             import random
             while True:
-                # Generate vibrant colors by using higher ranges
                 r = random.randint(100, 255)
                 g = random.randint(100, 255)
                 b = random.randint(100, 255)
                 color = f"#{r:02x}{g:02x}{b:02x}"
-                # Ensure we don't accidentally reuse a color
                 if color not in self.posture_colors.values():
                     break
             self.posture_colors[posture] = color
@@ -57,13 +54,10 @@ class AnnotationManager:
         """Start or finish an annotation at current timeline position"""
         current_time = self.app.media_player.position() / 1000  # Convert ms to seconds
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
-        
         if self.app.current_annotation is None:
-            # Starting a new annotation
             if self.check_overlap(current_time, current_time):
                 return
             self.app.current_annotation = TimelineAnnotation(start_time=current_time)
-            # Apply default labels if they exist
             if any(v for v in self.default_labels.values()):
                 self.app.current_annotation.update_comment_body(
                     posture=self.default_labels["posture"],
@@ -73,30 +67,24 @@ class AnnotationManager:
                     exp_situation=self.default_labels["exp_situation"],
                     special_notes=self.default_labels["special_notes"]
                 )
-            # Update timeline position to sync both timelines
             self.app.setPosition(self.app.media_player.position())
         else:
-            # Finishing an annotation
             if current_time < self.app.current_annotation.start_time:
-                # Don't allow end time before start time
                 QMessageBox.warning(self.app, "Invalid Annotation", "End time cannot be before start time.")
                 self.app.current_annotation = None
                 self.app.updateAnnotationTimeline()
                 return
             if self.check_overlap(self.app.current_annotation.start_time, current_time):
-                # Don't allow overlapping with existing annotations
                 QMessageBox.warning(self.app, "Invalid Annotation", "Annotations cannot overlap with each other.")
                 self.app.current_annotation = None
                 self.app.updateAnnotationTimeline()
                 return
             
-            # Add the annotation and maintain order
             self.app.current_annotation.end_time = current_time
             self.app.annotations.append(self.app.current_annotation)
             self.app.annotations.sort(key=lambda x: x.start_time)
             self.app.current_annotation = None
             self.app.updateAnnotationTimeline()
-            # Update timeline position to sync both timelines
             self.app.setPosition(self.app.media_player.position())
             
     def editAnnotation(self):
@@ -104,7 +92,6 @@ class AnnotationManager:
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_idx = self.get_current_annotation_index(sorted_annotations)
         
-        # Create dialog with existing annotation or None for new labels
         annotation = sorted_annotations[current_idx] if current_idx != -1 else None
         dialog = AnnotationDialog(annotation, self.app)
         if dialog.exec():
@@ -116,7 +103,6 @@ class AnnotationManager:
             special_notes = dialog.notes_edit.text()
             
             if annotation:
-                # Update existing annotation
                 annotation.update_comment_body(
                     posture=posture,
                     hlb=hlb,
@@ -126,7 +112,6 @@ class AnnotationManager:
                     special_notes=special_notes
                 )
             else:
-                # Store as default values for next annotation
                 self.default_labels.update({
                     "posture": posture,
                     "hlb": hlb,
@@ -148,11 +133,9 @@ class AnnotationManager:
         current_idx = self.get_current_annotation_index(sorted_annotations)
         
         if current_idx != -1:
-            # Delete the current annotation
             self.app.annotations.remove(sorted_annotations[current_idx])
             self.app.updateAnnotationTimeline()
         else:
-            # If no annotation at current time, delete the last annotation that ends before current time
             current_time = self.app.media_player.position() / 1000
             for annotation in reversed(sorted_annotations):
                 if annotation.end_time < current_time:
@@ -165,9 +148,6 @@ class AnnotationManager:
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_time = self.app.media_player.position() / 1000
         current_idx = self.get_current_annotation_index(sorted_annotations)
-        
-        # If we're in an annotation, look before current_idx
-        # Otherwise find the last annotation before current_time
         if current_idx != -1:
             if current_idx > 0:
                 prev_annotation = sorted_annotations[current_idx - 1]
@@ -184,9 +164,7 @@ class AnnotationManager:
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_time = self.app.media_player.position() / 1000
         current_idx = self.get_current_annotation_index(sorted_annotations)
-        
-        # If we're in an annotation, look after current_idx
-        # Otherwise find the first annotation after current_time
+    
         if current_idx != -1:
             if current_idx < len(sorted_annotations) - 1:
                 next_annotation = sorted_annotations[current_idx + 1]
@@ -206,9 +184,9 @@ class AnnotationManager:
         if current_idx > 0:
             current_annotation = sorted_annotations[current_idx]
             prev_annotation = sorted_annotations[current_idx - 1]            
-            # Check if annotations are adjacent (within small threshold or exactly at boundary)
+            # Check if annotations are adjacent 
             gap = abs(prev_annotation.end_time - current_annotation.start_time)
-            if gap > 0.001:  # Use a smaller threshold to handle floating point precision
+            if gap > 0.001:  # Use a smaller threshold to handle floating point precision 
                 QMessageBox.warning(self.app, "Invalid Merge", "Can only merge adjacent annotations.")
                 return
             
@@ -226,14 +204,12 @@ class AnnotationManager:
             # Copy comments from previous annotation if it has them
             if prev_annotation.comments:
                 merged_annotation.copy_comments_from(prev_annotation)
-            # Otherwise copy from current annotation if it has comments
             elif current_annotation.comments:
                 merged_annotation.copy_comments_from(current_annotation)
             
             # Add the merged annotation
             self.app.annotations.append(merged_annotation)
             
-            # Sort annotations to maintain order
             self.app.annotations.sort(key=lambda x: x.start_time)
             
             # Update timeline
@@ -252,41 +228,30 @@ class AnnotationManager:
         if current_idx != -1 and current_idx < len(sorted_annotations) - 1:
             current_annotation = sorted_annotations[current_idx]
             next_annotation = sorted_annotations[current_idx + 1]
-            
-            # Check if annotations are adjacent (within small threshold or exactly at boundary)
             gap = abs(current_annotation.end_time - next_annotation.start_time)
-            if gap > 0.001:  # Use a smaller threshold to handle floating point precision
+            if gap > 0.001:
                 QMessageBox.warning(self.app, "Invalid Merge", "Can only merge adjacent annotations.")
                 return
             
-            # Create the merged annotation before removing the originals
             merged_annotation = TimelineAnnotation(
                 start_time=current_annotation.start_time,
                 end_time=next_annotation.end_time
             )
             
-            # Copy comments from current annotation if it has them
             if current_annotation.comments:
                 merged_annotation.copy_comments_from(current_annotation)
-            # Otherwise copy from next annotation if it has comments
             elif next_annotation.comments:
                 merged_annotation.copy_comments_from(next_annotation)
-            
-            # First add the merged annotation
+        
             self.app.annotations.append(merged_annotation)
             
-            # Then remove the original annotations
-            # Remove in reverse order (next then current) to maintain correct indices
             del self.app.annotations[current_idx + 1]
             del self.app.annotations[current_idx]
             
-            # Sort annotations to maintain order
             self.app.annotations.sort(key=lambda x: x.start_time)
             
-            # Update timeline
             self.app.updateAnnotationTimeline()
             
-            # Update position to trigger timeline sync
             self.app.setPosition(self.app.media_player.position())
 
     def splitCurrentLabel(self):
@@ -297,26 +262,20 @@ class AnnotationManager:
         
         if current_idx != -1:
             annotation = sorted_annotations[current_idx]
-            # Only split if we're not at the boundaries
             if annotation.start_time < current_time < annotation.end_time:
-                # Ensure minimum segment length (0.1 seconds)
                 if current_time - annotation.start_time < 0.1 or annotation.end_time - current_time < 0.1:
                     QMessageBox.warning(self.app, "Invalid Split", "Split point too close to segment boundary.")
                     return
-                
-                # Create new annotation for the second half
+
                 new_annotation = TimelineAnnotation(
                     start_time=current_time,
                     end_time=annotation.end_time
                 )
                 
-                # Copy annotation data including comments
                 new_annotation.copy_comments_from(annotation)
                 
-                # Update the end time of the current annotation
                 annotation.end_time = current_time
                 
-                # Add the new annotation and resort
                 self.app.annotations.append(new_annotation)
                 self.app.annotations.sort(key=lambda x: x.start_time)
                 self.app.updateAnnotationTimeline()

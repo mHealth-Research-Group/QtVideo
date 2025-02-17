@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
-from PyQt6.QtGui import QAction, QKeyEvent
+from PyQt6.QtGui import QKeyEvent
 
 from models import TimelineAnnotation
 from widgets import TimelineWidget
@@ -34,11 +34,11 @@ class VideoPlayerApp(QMainWindow):
         """)
         
         # Initialize data storage
-        self.annotations = []  # List of TimelineAnnotation objects
-        self.current_annotation = None  # For tracking annotation in progress
+        self.annotations = [] 
+        self.current_annotation = None 
         self.video_hash = "NA"  # Placeholder for video hash
         
-        # Zoom region (as percentage of total duration)
+        # Zoom region
         self.zoom_start = 0.0
         self.zoom_end = 1.0  # Default to showing first 100%
         
@@ -47,12 +47,10 @@ class VideoPlayerApp(QMainWindow):
         self.shortcut_manager = ShortcutManager(self)
         
     def setupUI(self):
-        # Create central widget and layout
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         
-        # Create video container with padding and border
         video_container = QWidget()
         video_container.setStyleSheet("""
             QWidget {
@@ -64,7 +62,6 @@ class VideoPlayerApp(QMainWindow):
         """)
         video_container.setMinimumHeight(400)
         
-        # Create horizontal layout for video widgets
         video_container_layout = QHBoxLayout(video_container)
         video_container_layout.setContentsMargins(10, 10, 10, 10)
         video_container_layout.setSpacing(10)
@@ -81,10 +78,10 @@ class VideoPlayerApp(QMainWindow):
         
         # Create media players and widgets
         self.media_player = QMediaPlayer()
-        self.media_player_preview = QMediaPlayer()  # Preview player
+        self.media_player_preview = QMediaPlayer() 
         
         self.video_widget = QVideoWidget()
-        self.video_widget_preview = QVideoWidget()  # Preview widget
+        self.video_widget_preview = QVideoWidget()
         
         # Set up video outputs
         self.media_player.setVideoOutput(self.video_widget)
@@ -104,22 +101,12 @@ class VideoPlayerApp(QMainWindow):
         left_video_layout.addWidget(self.video_widget)
         right_video_layout.addWidget(self.video_widget_preview)
         
-        # Labels for each video widget
-        # main_label = QLabel("Current")
-        # preview_label = QLabel("Preview (+3s)")
-        # main_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # left_video_layout.addWidget(main_label)
-        # right_video_layout.addWidget(preview_label)
-        
         # Add containers to main video layout
         video_container_layout.addWidget(left_video_container)
         video_container_layout.addWidget(right_video_container)
         
         layout.addWidget(video_container, stretch=1)
         
-        # Rest of the UI components...
-        # Create timelines container with improved styling
         timelines_container = QWidget()
         timelines_container.setStyleSheet("""
             QWidget {
@@ -428,20 +415,17 @@ class VideoPlayerApp(QMainWindow):
         self.settings_menu.addAction("Export Labels", self.saveAnnotations)
         self.settings_menu.addAction("New Video", self.openFile)
         
-        # Connect gear button to show menu at button position
         self.gear_button.clicked.connect(self.showSettingsMenu)
         
         right_layout.addWidget(self.open_button)
         right_layout.addWidget(self.gear_button)
 
-        # Add left and right controls to main controls layout
         controls_layout.addWidget(left_controls)
         controls_layout.addStretch()
         controls_layout.addWidget(right_controls)
 
         layout.addWidget(controls_container)
         
-        # Connect signals for syncing media players
         self.media_player.playbackStateChanged.connect(self.updatePlayPauseButton)
         self.media_player.positionChanged.connect(self.positionChanged)
         self.media_player.durationChanged.connect(self.durationChanged)
@@ -452,9 +436,8 @@ class VideoPlayerApp(QMainWindow):
         )
 
     def showSettingsMenu(self):
-        # Show menu at the bottom right of the gear button
         pos = self.gear_button.mapToGlobal(self.gear_button.rect().bottomRight())
-        # Adjust position to align with right edge
+
         pos.setX(pos.x() - self.settings_menu.sizeHint().width())
         self.settings_menu.exec(pos)
             
@@ -468,15 +451,9 @@ class VideoPlayerApp(QMainWindow):
 
         target_preview_pos = position + self.PREVIEW_OFFSET
         current_preview_pos = self.media_player_preview.position()
-        
-        # Calculate the difference between current and target preview position
+
         position_diff = abs(target_preview_pos - current_preview_pos)
-        
-        # Only update if:
-        # 1. The difference is significant (exceeds threshold)
-        # 2. Or if we're in a seek operation (timeline drag)
         if position_diff > self.SYNC_THRESHOLD or self.timeline.isSliderDown():
-            # Ensure we don't exceed video duration
             max_position = self.media_player.duration()
             if target_preview_pos <= max_position:
                 self.media_player_preview.setPosition(target_preview_pos)
@@ -490,18 +467,12 @@ class VideoPlayerApp(QMainWindow):
             url = QUrl.fromLocalFile(filename)
             self.media_player.setSource(url)
             self.media_player_preview.setSource(url)
-
-
-            # Reset last update time
             self.last_preview_update = 0
-            
-            # Start playing then immediately pause to initialize both players
             self.media_player.play()
             self.media_player_preview.play()
             self.media_player.pause()
             self.media_player_preview.pause()
 
-            # Initial sync after a short delay to ensure both players are ready
             QTimer.singleShot(100, lambda: self._sync_preview_position(0))
             
             def on_duration_ready():
@@ -511,10 +482,8 @@ class VideoPlayerApp(QMainWindow):
                         self.zoom_end = 1.0  # Show entire duration
                     else:
                         self.zoom_end = 0.2  # Show first 20%
-                    # Force position update to sync timelines with new zoom
                     self.setPosition(self.media_player.position(), from_main=True)
             
-            # Wait briefly for duration to be available
             QTimer.singleShot(200, on_duration_ready)
             
             self.updatePlayPauseButton()
@@ -531,7 +500,6 @@ class VideoPlayerApp(QMainWindow):
         else:
             self.media_player.play()
             self.media_player_preview.play()
-            # Sync positions when starting playback
             self._sync_preview_position(self.media_player.position())
             
     def updatePlayPauseButton(self):
@@ -547,7 +515,6 @@ class VideoPlayerApp(QMainWindow):
         duration = self.media_player.duration()
         if duration > 0:
             if from_main:
-                # Direct position from main timeline
                 self.media_player.setPosition(position)
             else:
                 # Convert position from zoomed timeline
@@ -581,9 +548,8 @@ class VideoPlayerApp(QMainWindow):
         
         # Set zoom_end to show 20% of the slider's range
         if duration > self.MIN_ZOOM_DURATION:
-            visible_range = duration / 5  # 20% of total duration
+            visible_range = duration / 5
             self.zoom_end = visible_range / duration
-            # Update both timelines with new zoom
             self.timeline_widget.update()
             self.second_timeline_widget.update()
 
@@ -596,7 +562,6 @@ class VideoPlayerApp(QMainWindow):
         if filename:
             try:
                 with ZipFile(filename, 'w') as zipf:
-                    # Save labels.json
                     annotations_data = {
                         "annotations": [],
                         "videohash": self.video_hash
@@ -615,7 +580,6 @@ class VideoPlayerApp(QMainWindow):
                     
                     zipf.writestr('labels.json', json.dumps(annotations_data, indent=4))
 
-                    # Create CSV files for each heading
                     headers = {
                         'posture.csv': [],
                         'high_level_behavior.csv': [],
@@ -739,9 +703,7 @@ class VideoPlayerApp(QMainWindow):
         self.annotation_manager.splitCurrentLabel()
 
     def keyPressEvent(self, event: QKeyEvent):
-        # Handle number keys for category selection (1-5)
         if event.key() >= Qt.Key.Key_1 and event.key() <= Qt.Key.Key_5:
-            # Only process if annotation dialog is active
             dialog = self.findChild(AnnotationDialog)
             if dialog:
                 index = event.key() - Qt.Key.Key_1  # Convert key to 0-based index
