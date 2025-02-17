@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
-from PyQt6.QtGui import QAction, QKeyEvent, QTransform
+from PyQt6.QtGui import QAction, QKeyEvent
 
 from models import TimelineAnnotation
 from widgets import TimelineWidget
@@ -427,7 +427,6 @@ class VideoPlayerApp(QMainWindow):
         self.settings_menu.addAction("Load JSON", self.loadAnnotations)
         self.settings_menu.addAction("Export Labels", self.saveAnnotations)
         self.settings_menu.addAction("New Video", self.openFile)
-        self.settings_menu.addAction("Rotate Video", self.rotateVideo)
         
         # Connect gear button to show menu at button position
         self.gear_button.clicked.connect(self.showSettingsMenu)
@@ -520,19 +519,6 @@ class VideoPlayerApp(QMainWindow):
             
             self.updatePlayPauseButton()
             
-    def rotateVideo(self):
-        if hasattr(self, 'video_widget'):
-            # Store rotation in a class variable if it doesn't exist
-            if not hasattr(self, 'current_rotation'):
-                self.current_rotation = 0
-            
-            # Update rotation
-            self.current_rotation = (self.current_rotation + 90) % 360
-            
-            # Apply rotation using orientation
-            self.video_widget.setOrientation(self.current_rotation)
-            self.video_widget_preview.setOrientation(self.current_rotation)
-
     def updateSpeedLabel(self):
         if hasattr(self, 'media_player'):
             speed = self.media_player.playbackRate()
