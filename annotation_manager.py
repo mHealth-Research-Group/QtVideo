@@ -58,15 +58,14 @@ class AnnotationManager:
             if self.check_overlap(current_time, current_time):
                 return
             self.app.current_annotation = TimelineAnnotation(start_time=current_time)
-            if any(v for v in self.default_labels.values()):
-                self.app.current_annotation.update_comment_body(
-                    posture=self.default_labels["posture"],
-                    hlb=self.default_labels["hlb"],
-                    pa_type=self.default_labels["pa_type"],
-                    behavioral_params=self.default_labels["behavioral_params"],
-                    exp_situation=self.default_labels["exp_situation"],
-                    special_notes=self.default_labels["special_notes"]
-                )
+            self.app.current_annotation.update_comment_body(
+                posture=self.default_labels.get("posture", ""),
+                hlb=self.default_labels.get("hlb", []),
+                pa_type=self.default_labels.get("pa_type", ""),
+                behavioral_params=self.default_labels.get("behavioral_params", []),
+                exp_situation=self.default_labels.get("exp_situation", ""),
+                special_notes=self.default_labels.get("special_notes", "")
+            )
             self.app.setPosition(self.app.media_player.position())
         else:
             if current_time < self.app.current_annotation.start_time:
@@ -84,6 +83,14 @@ class AnnotationManager:
             self.app.annotations.append(self.app.current_annotation)
             self.app.annotations.sort(key=lambda x: x.start_time)
             self.app.current_annotation = None
+            self.default_labels = {
+                "posture": "",
+                "hlb": [],
+                "pa_type": "",
+                "behavioral_params": [],
+                "exp_situation": "",
+                "special_notes": ""
+            }
             self.app.updateAnnotationTimeline()
             self.app.setPosition(self.app.media_player.position())
             
@@ -102,29 +109,34 @@ class AnnotationManager:
             exp_situation = next(item.text() for item in dialog.es_list.selectedItems())
             special_notes = dialog.notes_edit.text()
             
+            label_data = {
+                "posture": posture,
+                "hlb": hlb,
+                "pa_type": pa_type,
+                "behavioral_params": behavioral_params,
+                "exp_situation": exp_situation,
+                "special_notes": special_notes
+            }
+
             if annotation:
-                annotation.update_comment_body(
-                    posture=posture,
-                    hlb=hlb,
-                    pa_type=pa_type,
-                    behavioral_params=behavioral_params,
-                    exp_situation=exp_situation,
-                    special_notes=special_notes
-                )
+                annotation.update_comment_body(**label_data)
             else:
-                self.default_labels.update({
-                    "posture": posture,
-                    "hlb": hlb,
-                    "pa_type": pa_type,
-                    "behavioral_params": behavioral_params,
-                    "exp_situation": exp_situation,
-                    "special_notes": special_notes
-                })
+                if self.app.current_annotation:
+                    self.app.current_annotation.update_comment_body(**label_data)
+                self.default_labels.update(label_data)
 
     def cancelAnnotation(self):
         """Cancel the current annotation in progress"""
         if self.app.current_annotation is not None:
             self.app.current_annotation = None
+            self.default_labels = {
+                "posture": "",
+                "hlb": [],
+                "pa_type": "",
+                "behavioral_params": [],
+                "exp_situation": "",
+                "special_notes": ""
+            }
             self.app.updateAnnotationTimeline()
 
     def deleteCurrentLabel(self):
