@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                            QSlider, QPushButton, QFileDialog, QLabel, QMessageBox,
-                           QMenu)
+                           QMenu, QGraphicsScene, QGraphicsView)
 from PyQt6.QtMultimedia import QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
 from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtGui import QPainter
 
 from models import TimelineAnnotation
 from widgets import TimelineWidget
@@ -76,30 +77,57 @@ class VideoPlayerApp(QMainWindow):
         right_video_layout = QVBoxLayout(right_video_container)
         right_video_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Create media players and widgets
+        # Create media players
         self.media_player = QMediaPlayer()
-        self.media_player_preview = QMediaPlayer() 
+        self.media_player_preview = QMediaPlayer()
         
-        self.video_widget = QVideoWidget()
-        self.video_widget_preview = QVideoWidget()
+        # Create scenes and views
+        self.scene = QGraphicsScene()
+        self.scene_preview = QGraphicsScene()
         
-        # Set up video outputs
-        self.media_player.setVideoOutput(self.video_widget)
-        self.media_player_preview.setVideoOutput(self.video_widget_preview)
+        self.view = QGraphicsView(self.scene)
+        self.view_preview = QGraphicsView(self.scene_preview)
         
-        # Apply styling to both video widgets
-        video_widget_style = """
-            QVideoWidget {
+        # Set styling for the views
+        view_style = """
+            QGraphicsView {
                 background-color: #000000;
                 border-radius: 4px;
             }
         """
-        self.video_widget.setStyleSheet(video_widget_style)
-        self.video_widget_preview.setStyleSheet(video_widget_style)
+        self.view.setStyleSheet(view_style)
+        self.view_preview.setStyleSheet(view_style)
         
-        # Add video widgets to their containers
-        left_video_layout.addWidget(self.video_widget)
-        right_video_layout.addWidget(self.video_widget_preview)
+        # Create video items
+        self.video_item = QGraphicsVideoItem()
+        self.video_item_preview = QGraphicsVideoItem()
+        
+        # Configure video items
+        self.video_item.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        self.video_item_preview.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        
+        self.video_item.setFlags(QGraphicsVideoItem.GraphicsItemFlag.ItemClipsToShape)
+        self.video_item_preview.setFlags(QGraphicsVideoItem.GraphicsItemFlag.ItemClipsToShape)
+        
+        # Add items to scenes
+        self.scene.addItem(self.video_item)
+        self.scene_preview.addItem(self.video_item_preview)
+        
+        # Set video outputs
+        self.media_player.setVideoOutput(self.video_item)
+        self.media_player_preview.setVideoOutput(self.video_item_preview)
+        
+        # Configure views
+        for view in [self.view, self.view_preview]:
+            view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
+            view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Add views to their containers
+        left_video_layout.addWidget(self.view)
+        right_video_layout.addWidget(self.view_preview)
         
         # Add containers to main video layout
         video_container_layout.addWidget(left_video_container)
@@ -414,6 +442,9 @@ class VideoPlayerApp(QMainWindow):
         self.settings_menu.addAction("Load JSON", self.loadAnnotations)
         self.settings_menu.addAction("Export Labels", self.saveAnnotations)
         self.settings_menu.addAction("New Video", self.openFile)
+        self.settings_menu.addSeparator()
+        self.rotate_action = self.settings_menu.addAction("Rotate Video", self.rotateVideo)
+        self.current_rotation = 0
         
         self.gear_button.clicked.connect(self.showSettingsMenu)
         
@@ -434,6 +465,29 @@ class VideoPlayerApp(QMainWindow):
         self.timeline.sliderReleased.connect(
             lambda: self._sync_preview_position(self.timeline.value())
         )
+
+        # Initial fit to view
+        QTimer.singleShot(0, self.fitVideoToViews)
+
+    def resizeEvent(self, event):
+        """Handle window resize events"""
+        super().resizeEvent(event)
+        self.fitVideoToViews()
+        
+    def fitVideoToViews(self):
+        """Fit video items to their views while maintaining aspect ratio"""
+        if hasattr(self, 'view') and hasattr(self, 'view_preview'):
+            rect = self.video_item.boundingRect()
+            if not rect.isEmpty():
+                # Set scene rect to match video item size
+                self.scene.setSceneRect(rect)
+                self.scene_preview.setSceneRect(rect)
+                
+                # Center video items
+                for view, item in [(self.view, self.video_item), 
+                                 (self.view_preview, self.video_item_preview)]:
+                    view.setSceneRect(rect)
+                    view.fitInView(item, Qt.AspectRatioMode.KeepAspectRatio)
 
     def showSettingsMenu(self):
         pos = self.gear_button.mapToGlobal(self.gear_button.rect().bottomRight())
@@ -483,11 +537,22 @@ class VideoPlayerApp(QMainWindow):
                     else:
                         self.zoom_end = 0.2  # Show first 20%
                     self.setPosition(self.media_player.position(), from_main=True)
+                    
+                    # Ensure proper video sizing
+                    QTimer.singleShot(100, self.fitVideoToViews)
             
+            # Set up sizing checks
+            self.media_player.mediaStatusChanged.connect(self._handleMediaStatus)
             QTimer.singleShot(200, on_duration_ready)
             
             self.updatePlayPauseButton()
             
+    def _handleMediaStatus(self, status):
+        """Handle media status changes to ensure proper video sizing"""
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            # Video is loaded, ensure proper sizing
+            self.fitVideoToViews()
+    
     def updateSpeedLabel(self):
         if hasattr(self, 'media_player'):
             speed = self.media_player.playbackRate()
@@ -542,6 +607,25 @@ class VideoPlayerApp(QMainWindow):
         self.timeline_widget.update()
         self.second_timeline_widget.update()
         
+    def rotateVideo(self):
+        """Rotate both video items by 90 degrees clockwise"""
+        self.current_rotation = (self.current_rotation + 90) % 360
+        
+        # Rotate and adjust both video items
+        for item, view in [(self.video_item, self.view), 
+                          (self.video_item_preview, self.view_preview)]:
+            # Center the rotation around the item's center
+            item.setTransformOriginPoint(item.boundingRect().center())
+            item.setRotation(self.current_rotation)
+            
+            # Update scene rect and view
+            scene_rect = item.sceneBoundingRect()
+            view.scene().setSceneRect(scene_rect)
+            view.fitInView(scene_rect, Qt.AspectRatioMode.KeepAspectRatio)
+            
+        # Force layout update
+        QTimer.singleShot(0, self.fitVideoToViews)
+
     def durationChanged(self, duration):
         self.timeline.setRange(0, duration)
         self.second_timeline.setRange(0, duration)
