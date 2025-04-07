@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication
-from video_player import VideoPlayerApp
+from src.video_player import VideoPlayerApp
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

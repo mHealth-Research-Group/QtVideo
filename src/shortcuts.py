@@ -1,5 +1,4 @@
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QMessageBox
 
 class ShortcutManager:
     def __init__(self, app):

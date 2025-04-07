@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QMessageBox
-from dialogs import AnnotationDialog
-from models import TimelineAnnotation
+from src.dialogs import AnnotationDialog
+from src.models import TimelineAnnotation
 
 class AnnotationManager:
     def __init__(self, app):
