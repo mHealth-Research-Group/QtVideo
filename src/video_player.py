@@ -810,7 +810,6 @@ class VideoPlayerApp(QMainWindow):
 
     def updateAnnotationTimeline(self):
         self.timeline_widget.update()
-        self.autosave() 
         
     def autosave(self):
         """Trigger autosave of current annotations"""

@@ -43,6 +43,7 @@ class AutosaveManager:
 
     def save_annotations(self, video_path: str, annotations: List[TimelineAnnotation], *, video_hash: int = 0) -> None:
         """Save annotations to autosave file"""
+        print(f"Autosaving annotations for {video_path}...")
         if not video_path:
             return
             
@@ -96,3 +97,18 @@ class AutosaveManager:
                 print(f"Failed to load autosave: {str(e)}")
         
         return None, False
+    
+def autosave(func):
+    """
+    Decorator to handle autosaving
+    """
+    def wrapper(self, *args, **kwargs):
+        # Call the original function
+        func(self, *args, **kwargs)
+        
+        # Save annotations after the function call
+        if hasattr(self, 'app') and hasattr(self.app, 'autosave_manager'):
+            # Call the autosave method in the app
+            self.app.autosave()
+
+    return wrapper
