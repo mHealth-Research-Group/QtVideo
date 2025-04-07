@@ -22,7 +22,7 @@ class VideoPlayerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video Annotator")
-        self.setGeometry(100, 100, 1280, 800)
+        self.setGeometry(100, 100, 1280, 1000)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #2b2b2b;
@@ -133,9 +133,10 @@ class VideoPlayerApp(QMainWindow):
         video_container_layout.addWidget(left_video_container)
         video_container_layout.addWidget(right_video_container)
         
-        layout.addWidget(video_container, stretch=1)
+        layout.addWidget(video_container, stretch=2)  # Increase stretch factor to maintain video size
         
         timelines_container = QWidget()
+        timelines_container.setMinimumHeight(100)
         timelines_container.setStyleSheet("""
             QWidget {
                 background-color: #2b2b2b;
@@ -216,11 +217,11 @@ class VideoPlayerApp(QMainWindow):
         
         timelines_layout.addWidget(second_timeline_container)
         
-        layout.addWidget(timelines_container)
+        layout.addWidget(timelines_container, stretch=0)
         
         # Keyboard shortcuts help section
-        shortcuts_container = QWidget()
-        shortcuts_container.setStyleSheet("""
+        self.shortcuts_container = QWidget()
+        self.shortcuts_container.setStyleSheet("""
             QWidget {
                 background-color: #1a1a1a;
                 border: 1px solid #3a3a3a;
@@ -258,7 +259,7 @@ class VideoPlayerApp(QMainWindow):
                 margin: 5px;
             }
         """)
-        shortcuts_layout = QHBoxLayout(shortcuts_container)
+        shortcuts_layout = QHBoxLayout(self.shortcuts_container)
         shortcuts_layout.setSpacing(15)
         
         # Create columns for different shortcut categories
@@ -335,7 +336,7 @@ class VideoPlayerApp(QMainWindow):
                     widget.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
             shortcuts_layout.addWidget(container)
         
-        layout.addWidget(shortcuts_container)
+        layout.addWidget(self.shortcuts_container, stretch=0)
         
         # Controls section
         controls_container = QWidget()
@@ -444,6 +445,8 @@ class VideoPlayerApp(QMainWindow):
         self.settings_menu.addAction("New Video", self.openFile)
         self.settings_menu.addSeparator()
         self.rotate_action = self.settings_menu.addAction("Rotate Video", self.rotateVideo)
+        self.settings_menu.addSeparator()
+        self.toggle_shortcuts_action = self.settings_menu.addAction("Hide Shortcuts", self.toggleShortcutsWidget)
         self.current_rotation = 0
         
         self.gear_button.clicked.connect(self.showSettingsMenu)
@@ -553,6 +556,13 @@ class VideoPlayerApp(QMainWindow):
             # Video is loaded, ensure proper sizing
             self.fitVideoToViews()
     
+    def toggleShortcutsWidget(self):
+        if hasattr(self, 'shortcuts_container'):
+            visible = self.shortcuts_container.isVisible()
+            self.shortcuts_container.setVisible(not visible)
+            self.toggle_shortcuts_action.setText("Show Shortcuts" if visible else "Hide Shortcuts")
+            QTimer.singleShot(100, self.fitVideoToViews)
+
     def updateSpeedLabel(self):
         if hasattr(self, 'media_player'):
             speed = self.media_player.playbackRate()
