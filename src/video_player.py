@@ -1,16 +1,17 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                            QSlider, QPushButton, QFileDialog, QLabel, QMessageBox,
-                           QMenu)
+                           QMenu, QGraphicsScene, QGraphicsView)
 from PyQt6.QtMultimedia import QMediaPlayer
-from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtMultimediaWidgets import QGraphicsVideoItem
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtGui import QKeyEvent, QPainter
 
-from models import TimelineAnnotation
-from widgets import TimelineWidget
-from dialogs import AnnotationDialog
-from shortcuts import ShortcutManager
-from annotation_manager import AnnotationManager
+from src.models import TimelineAnnotation
+from src.widgets import TimelineWidget
+from src.dialogs import AnnotationDialog
+from src.shortcuts import ShortcutManager
+from src.annotation_manager import AnnotationManager
+from src.utils import AutosaveManager
 import json
 
 class VideoPlayerApp(QMainWindow):
@@ -21,7 +22,19 @@ class VideoPlayerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video Annotator")
-        self.setGeometry(100, 100, 1280, 800)
+        self.setGeometry(100, 100, 1280, 1000)
+
+        # Setup autosave
+        self.autosave_manager = AutosaveManager(1000000)  # 1 minute interval
+        self.current_video_path = None
+        self.video_hash = 0
+        
+        # Create autosave timer
+        self.autosave_timer = QTimer(self)
+        self.autosave_timer.setInterval(self.autosave_manager.interval)
+        self.autosave_timer.timeout.connect(self.autosave)
+        self.autosave_timer.start()
+
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #2b2b2b;
@@ -36,7 +49,6 @@ class VideoPlayerApp(QMainWindow):
         # Initialize data storage
         self.annotations = [] 
         self.current_annotation = None 
-        self.video_hash = "NA"  # Placeholder for video hash
         
         # Zoom region
         self.zoom_start = 0.0
@@ -76,38 +88,60 @@ class VideoPlayerApp(QMainWindow):
         right_video_layout = QVBoxLayout(right_video_container)
         right_video_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Create media players and widgets
+        # Create media players
         self.media_player = QMediaPlayer()
-        self.media_player_preview = QMediaPlayer() 
+        self.media_player_preview = QMediaPlayer()
         
-        self.video_widget = QVideoWidget()
-        self.video_widget_preview = QVideoWidget()
+        # Create scenes and views
+        self.scene = QGraphicsScene()
+        self.scene_preview = QGraphicsScene()
         
-        # Set up video outputs
-        self.media_player.setVideoOutput(self.video_widget)
-        self.media_player_preview.setVideoOutput(self.video_widget_preview)
+        self.view = QGraphicsView(self.scene)
+        self.view_preview = QGraphicsView(self.scene_preview)
         
-        # Apply styling to both video widgets
-        video_widget_style = """
-            QVideoWidget {
+        # Set styling for the views
+        view_style = """
+            QGraphicsView {
                 background-color: #000000;
                 border-radius: 4px;
             }
         """
-        self.video_widget.setStyleSheet(video_widget_style)
-        self.video_widget_preview.setStyleSheet(video_widget_style)
+        self.view.setStyleSheet(view_style)
+        self.view_preview.setStyleSheet(view_style)
         
-        # Add video widgets to their containers
-        left_video_layout.addWidget(self.video_widget)
-        right_video_layout.addWidget(self.video_widget_preview)
+        self.video_item = QGraphicsVideoItem()
+        self.video_item_preview = QGraphicsVideoItem()
         
-        # Add containers to main video layout
+        self.video_item.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        self.video_item_preview.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+        
+        self.video_item.setFlags(QGraphicsVideoItem.GraphicsItemFlag.ItemClipsToShape)
+        self.video_item_preview.setFlags(QGraphicsVideoItem.GraphicsItemFlag.ItemClipsToShape)
+
+        self.scene.addItem(self.video_item)
+        self.scene_preview.addItem(self.video_item_preview)
+        
+        self.media_player.setVideoOutput(self.video_item)
+        self.media_player_preview.setVideoOutput(self.video_item_preview)
+        
+        for view in [self.view, self.view_preview]:
+            view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            view.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
+            view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        left_video_layout.addWidget(self.view)
+        right_video_layout.addWidget(self.view_preview)
+        
+
         video_container_layout.addWidget(left_video_container)
         video_container_layout.addWidget(right_video_container)
         
-        layout.addWidget(video_container, stretch=1)
+        layout.addWidget(video_container, stretch=2)
         
         timelines_container = QWidget()
+        timelines_container.setMinimumHeight(100)
         timelines_container.setStyleSheet("""
             QWidget {
                 background-color: #2b2b2b;
@@ -131,7 +165,6 @@ class VideoPlayerApp(QMainWindow):
         main_timeline_layout.setContentsMargins(0, 0, 0, 0)
         main_timeline_layout.addWidget(self.timeline_widget)
         
-        # Style the timeline slider with modern look
         self.timeline.setStyleSheet("""
             QSlider::groove:horizontal {
                 height: 4px;
@@ -188,11 +221,11 @@ class VideoPlayerApp(QMainWindow):
         
         timelines_layout.addWidget(second_timeline_container)
         
-        layout.addWidget(timelines_container)
+        layout.addWidget(timelines_container, stretch=0)
         
         # Keyboard shortcuts help section
-        shortcuts_container = QWidget()
-        shortcuts_container.setStyleSheet("""
+        self.shortcuts_container = QWidget()
+        self.shortcuts_container.setStyleSheet("""
             QWidget {
                 background-color: #1a1a1a;
                 border: 1px solid #3a3a3a;
@@ -230,10 +263,9 @@ class VideoPlayerApp(QMainWindow):
                 margin: 5px;
             }
         """)
-        shortcuts_layout = QHBoxLayout(shortcuts_container)
+        shortcuts_layout = QHBoxLayout(self.shortcuts_container)
         shortcuts_layout.setSpacing(15)
         
-        # Create columns for different shortcut categories
         video_shortcuts = QVBoxLayout()
         header = QLabel("🎥 Video Controls")
         header.setProperty("isHeader", True)
@@ -296,7 +328,6 @@ class VideoPlayerApp(QMainWindow):
             label.setProperty("isShortcut", True)
             dialog_shortcuts.addWidget(label)
         
-        # Add all columns to the shortcuts container
         for column in [video_shortcuts, label_shortcuts, nav_shortcuts, dialog_shortcuts]:
             container = QWidget()
             container.setProperty("isColumn", True)
@@ -307,7 +338,7 @@ class VideoPlayerApp(QMainWindow):
                     widget.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
             shortcuts_layout.addWidget(container)
         
-        layout.addWidget(shortcuts_container)
+        layout.addWidget(self.shortcuts_container, stretch=0)
         
         # Controls section
         controls_container = QWidget()
@@ -394,7 +425,6 @@ class VideoPlayerApp(QMainWindow):
             }
         """)
         
-        # Create settings menu
         self.settings_menu = QMenu(self)
         self.settings_menu.setStyleSheet("""
             QMenu {
@@ -410,10 +440,15 @@ class VideoPlayerApp(QMainWindow):
             }
         """)
         
-        # Add menu actions
+
         self.settings_menu.addAction("Load JSON", self.loadAnnotations)
         self.settings_menu.addAction("Export Labels", self.saveAnnotations)
         self.settings_menu.addAction("New Video", self.openFile)
+        self.settings_menu.addSeparator()
+        self.rotate_action = self.settings_menu.addAction("Rotate Video", self.rotateVideo)
+        self.settings_menu.addSeparator()
+        self.toggle_shortcuts_action = self.settings_menu.addAction("Hide Shortcuts", self.toggleShortcutsWidget)
+        self.current_rotation = 0
         
         self.gear_button.clicked.connect(self.showSettingsMenu)
         
@@ -434,6 +469,28 @@ class VideoPlayerApp(QMainWindow):
         self.timeline.sliderReleased.connect(
             lambda: self._sync_preview_position(self.timeline.value())
         )
+
+        QTimer.singleShot(0, self.fitVideoToViews)
+
+    def resizeEvent(self, event):
+        """Handle window resize events"""
+        super().resizeEvent(event)
+        self.fitVideoToViews()
+        
+    def fitVideoToViews(self):
+        """Fit video items to their views while maintaining aspect ratio"""
+        if hasattr(self, 'view') and hasattr(self, 'view_preview'):
+            rect = self.video_item.boundingRect()
+            if not rect.isEmpty():
+                # Set scene rect to match video item size
+                self.scene.setSceneRect(rect)
+                self.scene_preview.setSceneRect(rect)
+                
+                # Center video items
+                for view, item in [(self.view, self.video_item), 
+                                 (self.view_preview, self.video_item_preview)]:
+                    view.setSceneRect(rect)
+                    view.fitInView(item, Qt.AspectRatioMode.KeepAspectRatio)
 
     def showSettingsMenu(self):
         pos = self.gear_button.mapToGlobal(self.gear_button.rect().bottomRight())
@@ -464,7 +521,41 @@ class VideoPlayerApp(QMainWindow):
     def openFile(self):
         filename, _ = QFileDialog.getOpenFileName(self, "Open Video", "", "Video Files (*.mp4 *.avi *.mkv)")
         if filename:
+            self.current_video_path = filename
+            self.video_hash = self.autosave_manager.calculate_video_hash(filename)
             url = QUrl.fromLocalFile(filename)
+    
+            autosave_data, hash_matches = self.autosave_manager.check_for_autosave(filename, self.video_hash)
+            if autosave_data:
+                message = "An autosaved version of the annotations was found."
+                if not hash_matches:
+                    message += "\nWarning: The video file appears to have changed since the autosave."
+                message += "\nWould you like to restore from autosave or start over?"
+                
+                reply = QMessageBox.question(
+                    self,
+                    "Autosave Found",
+                    message,
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.annotations = []
+                    
+                    for ann_data in autosave_data.get("annotations", []):
+                        annotation = TimelineAnnotation()
+                        annotation.id = ann_data["id"]
+                        annotation.start_time = ann_data["range"]["start"]
+                        annotation.end_time = ann_data["range"]["end"]
+                        annotation.shape = ann_data["shape"]
+                        annotation.comments = ann_data["comments"]
+                        self.annotations.append(annotation)
+                    
+                    self.updateAnnotationTimeline()
+                else:
+                    # User chose to start over, delete the autosave
+                    self.autosave_manager.delete_autosave(filename)
+            
             self.media_player.setSource(url)
             self.media_player_preview.setSource(url)
             self.last_preview_update = 0
@@ -483,11 +574,29 @@ class VideoPlayerApp(QMainWindow):
                     else:
                         self.zoom_end = 0.2  # Show first 20%
                     self.setPosition(self.media_player.position(), from_main=True)
+                    
+                    # Ensure proper video sizing
+                    QTimer.singleShot(100, self.fitVideoToViews)
             
+            # Set up sizing checks
+            self.media_player.mediaStatusChanged.connect(self._handleMediaStatus)
             QTimer.singleShot(200, on_duration_ready)
             
             self.updatePlayPauseButton()
             
+    def _handleMediaStatus(self, status):
+        """Handle media status changes to ensure proper video sizing"""
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            # Video is loaded, ensure proper sizing
+            self.fitVideoToViews()
+    
+    def toggleShortcutsWidget(self):
+        if hasattr(self, 'shortcuts_container'):
+            visible = self.shortcuts_container.isVisible()
+            self.shortcuts_container.setVisible(not visible)
+            self.toggle_shortcuts_action.setText("Show Shortcuts" if visible else "Hide Shortcuts")
+            QTimer.singleShot(100, self.fitVideoToViews)
+
     def updateSpeedLabel(self):
         if hasattr(self, 'media_player'):
             speed = self.media_player.playbackRate()
@@ -526,7 +635,6 @@ class VideoPlayerApp(QMainWindow):
             
             self._sync_preview_position(self.media_player.position())
             
-            # Update both timeline widgets
             self.timeline_widget.update()
             self.second_timeline_widget.update()
         
@@ -542,11 +650,26 @@ class VideoPlayerApp(QMainWindow):
         self.timeline_widget.update()
         self.second_timeline_widget.update()
         
+    def rotateVideo(self):
+        """Rotate both video items by 90 degrees clockwise"""
+        self.current_rotation = (self.current_rotation + 90) % 360
+        
+        # Rotate and adjust both video items
+        for item, view in [(self.video_item, self.view), 
+                          (self.video_item_preview, self.view_preview)]:
+            item.setTransformOriginPoint(item.boundingRect().center())
+            item.setRotation(self.current_rotation)
+        
+            scene_rect = item.sceneBoundingRect()
+            view.scene().setSceneRect(scene_rect)
+            view.fitInView(scene_rect, Qt.AspectRatioMode.KeepAspectRatio)
+            
+        QTimer.singleShot(0, self.fitVideoToViews)
+
     def durationChanged(self, duration):
         self.timeline.setRange(0, duration)
         self.second_timeline.setRange(0, duration)
         
-        # Set zoom_end to show 20% of the slider's range
         if duration > self.MIN_ZOOM_DURATION:
             visible_range = duration / 5
             self.zoom_end = visible_range / duration
@@ -654,10 +777,22 @@ class VideoPlayerApp(QMainWindow):
             try:
                 with open(filename, 'r') as f:
                     data = json.load(f)
+       
+                if self.current_video_path:
+                    saved_hash = data.get("videohash", 0)
+                    if saved_hash != self.video_hash:
+                        reply = QMessageBox.question(
+                            self,
+                            "Hash Mismatch",
+                            "The video file used to create these annotations appears to be different.\n"
+                            "Loading annotations from a different video may result in incorrect timings.\n"
+                            "Would you like to continue loading anyway?",
+                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                        )
+                        if reply == QMessageBox.StandardButton.No:
+                            return
                 
                 self.annotations = []
-                self.video_hash = data.get("videohash", "NA")
-                
                 for ann_data in data.get("annotations", []):
                     annotation = TimelineAnnotation()
                     annotation.id = ann_data["id"]
@@ -668,13 +803,22 @@ class VideoPlayerApp(QMainWindow):
                     self.annotations.append(annotation)
                 
                 self.updateAnnotationTimeline()
+                if self.current_video_path:
+                    self.autosave()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load annotations: {str(e)}")
 
     def updateAnnotationTimeline(self):
         self.timeline_widget.update()
-
-    # Delegate annotation operations to annotation_manager
+        
+    def autosave(self):
+        """Trigger autosave of current annotations"""
+        if hasattr(self, 'current_video_path') and self.current_video_path:
+            self.autosave_manager.save_annotations(
+                self.current_video_path,
+                self.annotations,
+                video_hash=self.video_hash
+            )
     def toggleAnnotation(self):
         self.annotation_manager.toggleAnnotation()
 
@@ -706,6 +850,6 @@ class VideoPlayerApp(QMainWindow):
         if event.key() >= Qt.Key.Key_1 and event.key() <= Qt.Key.Key_5:
             dialog = self.findChild(AnnotationDialog)
             if dialog:
-                index = event.key() - Qt.Key.Key_1  # Convert key to 0-based index
+                index = event.key() - Qt.Key.Key_1 
                 dialog.selectCategoryByIndex(index)
         super().keyPressEvent(event)

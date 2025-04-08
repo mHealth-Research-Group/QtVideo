@@ -612,7 +612,7 @@ class AnnotationDialog(QDialog):
     def load_categories(self):
         """Load categories from the CSV file"""
         try:
-            with open('categories.csv', 'r') as f:
+            with open('data/categories/categories.csv', 'r') as f:
                 reader = csv.DictReader(f)
                 categories = {
                     'POSTURE': ["Posture_Unlabeled"],

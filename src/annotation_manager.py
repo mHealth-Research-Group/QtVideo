@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QMessageBox
-from dialogs import AnnotationDialog
-from models import TimelineAnnotation
+from src.dialogs import AnnotationDialog
+from src.models import TimelineAnnotation
+from src.utils import autosave
 
 class AnnotationManager:
     def __init__(self, app):
@@ -50,6 +51,7 @@ class AnnotationManager:
                 return i
         return -1
 
+    @autosave
     def toggleAnnotation(self):
         """Start or finish an annotation at current timeline position"""
         current_time = self.app.media_player.position() / 1000  # Convert ms to seconds
@@ -94,6 +96,7 @@ class AnnotationManager:
             self.app.updateAnnotationTimeline()
             self.app.setPosition(self.app.media_player.position())
             
+    @autosave
     def editAnnotation(self):
         """Edit the annotation at current timeline position or pre-set labels for next annotation"""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
@@ -125,6 +128,7 @@ class AnnotationManager:
                     self.app.current_annotation.update_comment_body(**label_data)
                 self.default_labels.update(label_data)
 
+    @autosave
     def cancelAnnotation(self):
         """Cancel the current annotation in progress"""
         if self.app.current_annotation is not None:
@@ -139,6 +143,7 @@ class AnnotationManager:
             }
             self.app.updateAnnotationTimeline()
 
+    @autosave
     def deleteCurrentLabel(self):
         """Delete the label at current timeline position"""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
@@ -188,6 +193,7 @@ class AnnotationManager:
                     self.app.media_player.setPosition(int(annotation.start_time * 1000))
                     break
 
+    @autosave
     def mergeWithPrevious(self):
         """Merge current label with the previous label"""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
@@ -232,6 +238,7 @@ class AnnotationManager:
             # Update position to trigger timeline sync
             self.app.setPosition(self.app.media_player.position())
 
+    @autosave
     def mergeWithNext(self):
         """Merge current label with the next label"""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
@@ -266,6 +273,7 @@ class AnnotationManager:
             
             self.app.setPosition(self.app.media_player.position())
 
+    @autosave
     def splitCurrentLabel(self):
         """Split the current label at the current position"""
         current_time = self.app.media_player.position() / 1000
