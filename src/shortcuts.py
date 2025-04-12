@@ -117,6 +117,8 @@ class ShortcutManager:
         current = self.app.media_player.position()
         new_pos = max(0, min(current + ms, self.app.media_player.duration()))
         self.app.media_player.setPosition(new_pos)
+        # Sync the preview player
+        self.app._sync_preview_position(new_pos)
 
     def adjustPreviewSkip(self, seconds):
         """Adjust the preview skip time"""
@@ -125,5 +127,8 @@ class ShortcutManager:
         preview_time = current_time + seconds
         # Ensure preview time stays within video bounds
         preview_time = max(0, min(preview_time, self.app.media_player.duration() / 1000))
+        new_pos = int(preview_time * 1000)
         # Set the new position
-        self.app.media_player.setPosition(int(preview_time * 1000))
+        self.app.media_player.setPosition(new_pos)
+        # Sync the preview player
+        self.app._sync_preview_position(new_pos)
