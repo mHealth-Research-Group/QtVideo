@@ -1,8 +1,8 @@
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                            QPushButton, QWidget, QDialogButtonBox, QComboBox,
                            QGridLayout, QFrame, QScrollArea, QLayout)
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint, QTimer
-from PyQt6.QtGui import QKeyEvent
+from PySide6.QtCore import Qt, Signal, QSize, QRect, QPoint, QTimer
+from PySide6.QtGui import QKeyEvent
 import json
 import csv
 
@@ -82,7 +82,7 @@ class FlowLayout(QLayout):
         return y + lineHeight - rect.y()
 
 class TagWidget(QFrame):
-    removed = pyqtSignal(str)
+    removed = Signal(str)
     
     def __init__(self, text, parent=None):
         super().__init__(parent)
@@ -125,7 +125,7 @@ class TagWidget(QFrame):
         layout.addWidget(remove_btn)
 
 class SelectionWidget(QWidget):
-    selectionChanged = pyqtSignal(list)
+    selectionChanged = Signal(list)
     
     def __init__(self, combo, active_label, multi_select=False, parent=None):
         super().__init__(parent)

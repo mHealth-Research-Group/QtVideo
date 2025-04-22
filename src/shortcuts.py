@@ -1,4 +1,4 @@
-from PyQt6.QtGui import QAction
+from PySide6.QtGui import QAction
 
 class ShortcutManager:
     def __init__(self, app):
@@ -101,34 +101,38 @@ class ShortcutManager:
         self.app.addAction(self.toggle_dialog)
 
     def setPlaybackRate(self, rate):
-        """Set the playback rate directly for both players"""
-        self.app.media_player.setPlaybackRate(rate)
-        self.app.media_player_preview.setPlaybackRate(rate)
+        """Tell the main app to set the playback rate."""
+        if hasattr(self.app, 'setPlaybackRate'): # Check if method exists on app
+             self.app.setPlaybackRate(rate) # Call the app's method
+        else:
+             print("ShortcutManager: Error - self.app has no setPlaybackRate method.")
 
     def adjustPlaybackRate(self, delta):
-        """Adjust the playback rate by the given delta for both players"""
-        current_rate = self.app.media_player.playbackRate()
-        new_rate = max(0.25, current_rate + delta)  # Ensure rate doesn't go below 0.25
-        self.app.media_player.setPlaybackRate(new_rate)
-        self.app.media_player_preview.setPlaybackRate(new_rate)
+        """Tell the main app to adjust the playback rate."""
+        if hasattr(self.app, 'changePlaybackRate'): # Check if method exists on app
+            # Note: We call changePlaybackRate which handles getting current rate
+            self.app.changePlaybackRate(delta)
+        else:
+            print("ShortcutManager: Error - self.app has no changePlaybackRate method.")
 
+    # Keep skipTime method, but make it call app's seek method
     def skipTime(self, ms):
-        """Skip forward or backward by the specified number of milliseconds"""
-        current = self.app.media_player.position()
-        new_pos = max(0, min(current + ms, self.app.media_player.duration()))
-        self.app.media_player.setPosition(new_pos)
-        # Sync the preview player
-        self.app._sync_preview_position(new_pos)
+        """Tell the main app to skip time."""
+        if hasattr(self.app, 'qml_root_main') and self.app.qml_root_main:
+            current = self.app.media_player['_position'] # Use tracked position
+            duration = self.app.media_player['_duration'] # Use tracked duration
+            target_pos = max(0, min(current + ms, duration if duration > 0 else current + ms)) # Basic clamping
+            print(f"ShortcutManager: Seeking main player to {target_pos}")
+            self.app.qml_root_main.seek(target_pos)
+            # Also sync preview immediately after shortcut seek
+            self.app._sync_preview_qml_position(target_pos)
+        else:
+            print("ShortcutManager: Cannot skip time, QML player not ready.")
 
-    def adjustPreviewSkip(self, seconds):
-        """Adjust the preview skip time"""
-        current_time = self.app.media_player.position() / 1000
-        # Preview the position by skipping forward/backward
-        preview_time = current_time + seconds
-        # Ensure preview time stays within video bounds
-        preview_time = max(0, min(preview_time, self.app.media_player.duration() / 1000))
-        new_pos = int(preview_time * 1000)
-        # Set the new position
-        self.app.media_player.setPosition(new_pos)
-        # Sync the preview player
-        self.app._sync_preview_position(new_pos)
+    # adjustPreviewSkip might need similar adaptation if PREVIEW_OFFSET is dynamic
+    def adjustPreviewSkip(self, seconds_delta):
+         # This requires PREVIEW_OFFSET to be adjustable in VideoPlayerApp
+         if hasattr(self.app, 'adjustPreviewOffset'):
+             self.app.adjustPreviewOffset(seconds_delta * 1000) # Convert s to ms
+         else:
+             print("ShortcutManager: self.app has no adjustPreviewOffset method.")
