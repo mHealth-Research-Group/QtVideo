@@ -265,11 +265,10 @@ class AnnotationManager:
                     target_time = annotation.start_time
                     break
 
-    @autosave
         if target_time != -1:
             self.app.setPosition(int(target_time * 1000))
 
-
+    @autosave
     def mergeWithPrevious(self):
         """Merge the annotation at the current position with the previous one if adjacent."""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
@@ -321,6 +320,7 @@ class AnnotationManager:
         self.app.updateAnnotationTimeline()
         # No setPosition needed
 
+    @autosave
     def mergeWithNext(self):
         """Merge the annotation at the current position with the next one if adjacent."""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
@@ -370,6 +370,7 @@ class AnnotationManager:
         # Update timeline display
         self.app.updateAnnotationTimeline()
 
+    @autosave
     def splitCurrentLabel(self):
         """Split the annotation at the current playhead position into two."""
         current_time = self.app.media_player['_position'] / 1000.0 # Position in seconds
