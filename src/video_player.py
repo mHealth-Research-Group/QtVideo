@@ -387,9 +387,15 @@ class VideoPlayerApp(QMainWindow):
 
     def loadQmlSources(self):
         """Loads the QML source file into the QuickWidgets."""
+    
+        if getattr(sys, 'frozen', False):
+            # Running in PyInstaller bundle
+            base_path = os.path.join(sys._MEIPASS, 'src')
+        else:
+            # Running in development
+            base_path = os.path.dirname(__file__)
         
-        script_dir = os.path.dirname(__file__)
-        qml_file_path = os.path.join(script_dir, 'VideoPlayer.qml') 
+        qml_file_path = os.path.join(base_path, 'VideoPlayer.qml')
 
         print(f"--- [LOAD] Attempting QML load from: {qml_file_path}")
         if not os.path.exists(qml_file_path):

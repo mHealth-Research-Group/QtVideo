@@ -27,7 +27,7 @@ jobs:
       
     - name: Build with PyInstaller
       run: |
-        pyinstaller --name qtwebscrub --windowed --onefile main.py
+        pyinstaller --name qtwebscrub --windowed --onefile --add-data "src/VideoPlayer.qml:src" main.py
         
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
@@ -54,7 +54,7 @@ jobs:
         
     - name: Build with PyInstaller
       run: |
-        pyinstaller --name qtwebscrub --windowed --onedir main.py
+        pyinstaller --name qtwebscrub --windowed --onedir --add-data "src/VideoPlayer.qml:src" main.py
         
     - name: Install create-dmg
       run: |
@@ -89,7 +89,7 @@ jobs:
         
     - name: Build with PyInstaller
       run: |
-        pyinstaller --name qtwebscrub --windowed --onedir main.py
+        pyinstaller --name qtwebscrub --windowed --onedir --add-data "src/VideoPlayer.qml:src" main.py
         
     - name: Install create-dmg
       run: |
@@ -124,7 +124,7 @@ jobs:
         
     - name: Build with PyInstaller
       run: |
-        pyinstaller --name qtwebscrub --windowed --onefile main.py
+        pyinstaller --name qtwebscrub --windowed --onefile --add-data "src/VideoPlayer.qml:src" main.py
         
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
