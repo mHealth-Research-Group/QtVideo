@@ -720,7 +720,22 @@ class VideoPlayerApp(QMainWindow):
                 print("--- No autosave data found.")
                 self.updateAnnotationTimeline() 
 
-            url = QUrl.fromLocalFile(filename)
+            if getattr(sys, 'frozen', False):
+                # Running in PyInstaller bundle - ensure proper URL format
+                from urllib.parse import quote
+                filename = quote(filename)
+                if not filename.startswith('/'):
+                    filename = '/' + filename
+                url = QUrl('file://' + filename)
+            else:
+                # Running in development
+                url = QUrl.fromLocalFile(filename)
+            
+            # Check if a file exsists at the path
+            if not os.path.exists(filename):
+                print(f"--- Error: File does not exist at path: {filename}")
+                QMessageBox.critical(self, "File Error", f"The selected file does not exist:\n{filename}")
+                return
             print(f"--- Converted to QUrl: {url.toString()}")
 
             
