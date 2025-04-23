@@ -22,20 +22,38 @@ jobs:
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-    - name: Build with PyInstaller and Bundle Multimedia Plugin
+    - name: Build with PyInstaller and Bundle More Plugins
       shell: bash
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))" | sed 's/\\/\//g')
-        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -iname 'wmfmediaplugin.dll' -print -quit)
-        if [ -z "$PLUGIN_PATH" ]; then
-          echo "Error: Could not find wmfmediaplugin.dll in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
-          exit 1
-        fi
-        echo "Found WMF plugin at: $PLUGIN_PATH"
-        # On Windows, --add-binary uses ';' as separator, --add-data also uses ';'
+        echo "PyQt6 base directory: $PYQT6_DIR"
+        PLUGIN_DIRS=(
+          "multimedia"
+          "mediaservice"
+          "imageformats"
+          "audio"
+          "platforms"
+          "renderers"
+          "styles"
+          "platformthemes"
+          "iconengines"
+        )
+        ADD_BINARY_FLAGS=""
+        for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
+          FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
+          if [ -d "$FULL_PLUGIN_PATH" ]; then
+            echo "Adding binaries from: $FULL_PLUGIN_PATH"
+            # Use ';' separator for source files and destination dir on Windows
+            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*;PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+          else
+            echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
+          fi
+        done
+
+        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
         pyinstaller --name qtwebscrub --windowed --onefile \
           --add-data "src/VideoPlayer.qml;src" \
-          --add-binary "$PLUGIN_PATH;PyQt6/Qt6/plugins/multimedia" \
+          $ADD_BINARY_FLAGS \
           main.py
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
@@ -56,20 +74,38 @@ jobs:
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-    - name: Build with PyInstaller and Bundle Multimedia Plugin
+    - name: Build with PyInstaller and Bundle More Plugins
       shell: bash
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
-        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -name 'avfmediaplugin.dylib' -print -quit)
-        if [ -z "$PLUGIN_PATH" ]; then
-          echo "Error: Could not find avfmediaplugin.dylib in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
-          exit 1
-        fi
-        echo "Found AVF plugin at: $PLUGIN_PATH"
-        # On macOS/Linux, --add-binary uses ':' as separator, --add-data also uses ':'
+        echo "PyQt6 base directory: $PYQT6_DIR"
+        PLUGIN_DIRS=(
+          "multimedia"
+          "mediaservice"
+          "imageformats"
+          "audio"
+          "platforms"
+          "renderers"
+          "styles"
+          "platformthemes"
+          "iconengines"
+        )
+        ADD_BINARY_FLAGS=""
+        for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
+          FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
+          if [ -d "$FULL_PLUGIN_PATH" ]; then
+            echo "Adding binaries from: $FULL_PLUGIN_PATH"
+            # Use ':' separator for source files and destination dir on macOS/Linux
+            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+          else
+            echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
+          fi
+        done
+
+        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
         pyinstaller --name qtwebscrub --windowed --onedir \
           --add-data "src/VideoPlayer.qml:src" \
-          --add-binary "$PLUGIN_PATH:PyQt6/Qt6/plugins/multimedia" \
+          $ADD_BINARY_FLAGS \
           main.py
     - name: Install create-dmg
       run: |
@@ -96,20 +132,38 @@ jobs:
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-    - name: Build with PyInstaller and Bundle Multimedia Plugin
+    - name: Build with PyInstaller and Bundle More Plugins
       shell: bash
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
-        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -name 'avfmediaplugin.dylib' -print -quit)
-        if [ -z "$PLUGIN_PATH" ]; then
-          echo "Error: Could not find avfmediaplugin.dylib in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
-          exit 1
-        fi
-        echo "Found AVF plugin at: $PLUGIN_PATH"
-        # On macOS/Linux, --add-binary uses ':' as separator, --add-data also uses ':'
+        echo "PyQt6 base directory: $PYQT6_DIR"
+        PLUGIN_DIRS=(
+          "multimedia"
+          "mediaservice"
+          "imageformats"
+          "audio"
+          "platforms"
+          "renderers"
+          "styles"
+          "platformthemes"
+          "iconengines"
+        )
+        ADD_BINARY_FLAGS=""
+        for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
+          FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
+          if [ -d "$FULL_PLUGIN_PATH" ]; then
+            echo "Adding binaries from: $FULL_PLUGIN_PATH"
+            # Use ':' separator for source files and destination dir on macOS/Linux
+            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+          else
+            echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
+          fi
+        done
+
+        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
         pyinstaller --name qtwebscrub --windowed --onedir \
           --add-data "src/VideoPlayer.qml:src" \
-          --add-binary "$PLUGIN_PATH:PyQt6/Qt6/plugins/multimedia" \
+          $ADD_BINARY_FLAGS \
           main.py
     - name: Install create-dmg
       run: |
@@ -140,20 +194,42 @@ jobs:
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-    - name: Build with PyInstaller and Bundle Multimedia Plugin
+    - name: Build with PyInstaller and Bundle More Plugins
       shell: bash
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
-        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -name 'libgstmediaplugin.so' -print -quit)
-        if [ -z "$PLUGIN_PATH" ]; then
-          echo "Error: Could not find libgstmediaplugin.so in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
-          exit 1
-        fi
-        echo "Found GStreamer plugin at: $PLUGIN_PATH"
-        # On macOS/Linux, --add-binary uses ':' as separator, --add-data also uses ':'
+        echo "PyQt6 base directory: $PYQT6_DIR"
+        PLUGIN_DIRS=(
+          "multimedia"
+          "mediaservice"
+          "imageformats"
+          "audio"
+          "platforms"
+          "renderers"
+          "styles"
+          "platformthemes"
+          "iconengines"
+          "xcbglintegrations" # Linux specific
+          "wayland-shell-integration" # Linux specific
+          "wayland-graphics-integration-client" # Linux specific
+          "wayland-decoration-client" # Linux specific
+        )
+        ADD_BINARY_FLAGS=""
+        for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
+          FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
+          if [ -d "$FULL_PLUGIN_PATH" ]; then
+            echo "Adding binaries from: $FULL_PLUGIN_PATH"
+            # Use ':' separator for source files and destination dir on macOS/Linux
+            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+          else
+            echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
+          fi
+        done
+
+        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
         pyinstaller --name qtwebscrub --windowed --onefile \
           --add-data "src/VideoPlayer.qml:src" \
-          --add-binary "$PLUGIN_PATH:PyQt6/Qt6/plugins/multimedia" \
+          $ADD_BINARY_FLAGS \
           main.py
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
