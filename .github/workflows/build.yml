@@ -27,6 +27,15 @@ jobs:
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))" | sed 's/\\/\//g')
         echo "PyQt6 base directory: $PYQT6_DIR"
+
+        # Base PyInstaller arguments using bash array
+        PYINSTALLER_ARGS=(
+          --name qtwebscrub
+          --windowed
+          --onefile
+          --add-data "src/VideoPlayer.qml;src" # Windows uses ';' separator for paths
+        )
+
         PLUGIN_DIRS=(
           "multimedia"
           "mediaservice"
@@ -38,23 +47,24 @@ jobs:
           "platformthemes"
           "iconengines"
         )
-        ADD_BINARY_FLAGS=""
+
         for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
           FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
           if [ -d "$FULL_PLUGIN_PATH" ]; then
-            echo "Adding binaries from: $FULL_PLUGIN_PATH"
-            # Use ';' separator for source files and destination dir on Windows
-            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*;PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+            echo "Queueing binaries from: $FULL_PLUGIN_PATH"
+            # Use --add-binary=SOURCE;DEST syntax for Windows (matching error msg structure)
+            PYINSTALLER_ARGS+=("--add-binary=$FULL_PLUGIN_PATH/*;PyQt6/Qt6/plugins/$PLUGIN_DIR")
           else
             echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
           fi
         done
 
-        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
-        pyinstaller --name qtwebscrub --windowed --onefile \
-          --add-data "src/VideoPlayer.qml;src" \
-          $ADD_BINARY_FLAGS \
-          main.py
+        # Add main script to arguments
+        PYINSTALLER_ARGS+=(main.py)
+
+        echo "Executing PyInstaller with args:"
+        printf "  %q\n" "${PYINSTALLER_ARGS[@]}" # Debug print args
+        pyinstaller "${PYINSTALLER_ARGS[@]}" # Execute with array expansion
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
@@ -79,6 +89,15 @@ jobs:
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
         echo "PyQt6 base directory: $PYQT6_DIR"
+
+        # Base PyInstaller arguments using bash array
+        PYINSTALLER_ARGS=(
+          --name qtwebscrub
+          --windowed
+          --onedir
+          --add-data "src/VideoPlayer.qml:src" # macOS uses ':' separator for paths
+        )
+
         PLUGIN_DIRS=(
           "multimedia"
           "mediaservice"
@@ -90,23 +109,24 @@ jobs:
           "platformthemes"
           "iconengines"
         )
-        ADD_BINARY_FLAGS=""
+
         for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
           FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
           if [ -d "$FULL_PLUGIN_PATH" ]; then
-            echo "Adding binaries from: $FULL_PLUGIN_PATH"
-            # Use ':' separator for source files and destination dir on macOS/Linux
-            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+            echo "Queueing binaries from: $FULL_PLUGIN_PATH"
+            # Use --add-binary=SOURCE:DEST syntax for macOS/Linux
+            PYINSTALLER_ARGS+=("--add-binary=$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR")
           else
             echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
           fi
         done
 
-        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
-        pyinstaller --name qtwebscrub --windowed --onedir \
-          --add-data "src/VideoPlayer.qml:src" \
-          $ADD_BINARY_FLAGS \
-          main.py
+        # Add main script to arguments
+        PYINSTALLER_ARGS+=(main.py)
+
+        echo "Executing PyInstaller with args:"
+        printf "  %q\n" "${PYINSTALLER_ARGS[@]}" # Debug print args
+        pyinstaller "${PYINSTALLER_ARGS[@]}" # Execute with array expansion
     - name: Install create-dmg
       run: |
         brew install create-dmg
@@ -137,6 +157,15 @@ jobs:
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
         echo "PyQt6 base directory: $PYQT6_DIR"
+
+        # Base PyInstaller arguments using bash array
+        PYINSTALLER_ARGS=(
+          --name qtwebscrub
+          --windowed
+          --onedir
+          --add-data "src/VideoPlayer.qml:src" # macOS uses ':' separator for paths
+        )
+
         PLUGIN_DIRS=(
           "multimedia"
           "mediaservice"
@@ -148,23 +177,24 @@ jobs:
           "platformthemes"
           "iconengines"
         )
-        ADD_BINARY_FLAGS=""
+
         for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
           FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
           if [ -d "$FULL_PLUGIN_PATH" ]; then
-            echo "Adding binaries from: $FULL_PLUGIN_PATH"
-            # Use ':' separator for source files and destination dir on macOS/Linux
-            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+            echo "Queueing binaries from: $FULL_PLUGIN_PATH"
+             # Use --add-binary=SOURCE:DEST syntax for macOS/Linux
+            PYINSTALLER_ARGS+=("--add-binary=$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR")
           else
             echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
           fi
         done
 
-        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
-        pyinstaller --name qtwebscrub --windowed --onedir \
-          --add-data "src/VideoPlayer.qml:src" \
-          $ADD_BINARY_FLAGS \
-          main.py
+        # Add main script to arguments
+        PYINSTALLER_ARGS+=(main.py)
+
+        echo "Executing PyInstaller with args:"
+        printf "  %q\n" "${PYINSTALLER_ARGS[@]}" # Debug print args
+        pyinstaller "${PYINSTALLER_ARGS[@]}" # Execute with array expansion
     - name: Install create-dmg
       run: |
         brew install create-dmg
@@ -181,10 +211,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install Multimedia System Dependencies
+    # Install only base GStreamer libs, assuming bundled Qt plugin is sufficient
+    - name: Install Base Multimedia System Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav libgstreamer-gl1.0-0 libqt6multimedia6-plugins libcanberra-gtk-module
+        sudo apt-get install -y libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav libgstreamer-gl1.0-0
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -199,6 +230,15 @@ jobs:
       run: |
         PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
         echo "PyQt6 base directory: $PYQT6_DIR"
+
+        # Base PyInstaller arguments using bash array
+        PYINSTALLER_ARGS=(
+          --name qtwebscrub
+          --windowed
+          --onefile
+          --add-data "src/VideoPlayer.qml:src" # Linux uses ':' separator for paths
+        )
+
         PLUGIN_DIRS=(
           "multimedia"
           "mediaservice"
@@ -209,28 +249,29 @@ jobs:
           "styles"
           "platformthemes"
           "iconengines"
-          "xcbglintegrations" # Linux specific
-          "wayland-shell-integration" # Linux specific
-          "wayland-graphics-integration-client" # Linux specific
-          "wayland-decoration-client" # Linux specific
+          "xcbglintegrations"
+          "wayland-shell-integration"
+          "wayland-graphics-integration-client"
+          "wayland-decoration-client"
         )
-        ADD_BINARY_FLAGS=""
+
         for PLUGIN_DIR in "${PLUGIN_DIRS[@]}"; do
           FULL_PLUGIN_PATH="$PYQT6_DIR/Qt6/plugins/$PLUGIN_DIR"
           if [ -d "$FULL_PLUGIN_PATH" ]; then
-            echo "Adding binaries from: $FULL_PLUGIN_PATH"
-            # Use ':' separator for source files and destination dir on macOS/Linux
-            ADD_BINARY_FLAGS+=" --add-binary \"$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR\""
+            echo "Queueing binaries from: $FULL_PLUGIN_PATH"
+             # Use --add-binary=SOURCE:DEST syntax for macOS/Linux
+            PYINSTALLER_ARGS+=("--add-binary=$FULL_PLUGIN_PATH/*:PyQt6/Qt6/plugins/$PLUGIN_DIR")
           else
             echo "Warning: Plugin directory not found: $FULL_PLUGIN_PATH"
           fi
         done
 
-        echo "PyInstaller flags for binaries: $ADD_BINARY_FLAGS"
-        pyinstaller --name qtwebscrub --windowed --onefile \
-          --add-data "src/VideoPlayer.qml:src" \
-          $ADD_BINARY_FLAGS \
-          main.py
+        # Add main script to arguments
+        PYINSTALLER_ARGS+=(main.py)
+
+        echo "Executing PyInstaller with args:"
+        printf "  %q\n" "${PYINSTALLER_ARGS[@]}" # Debug print args
+        pyinstaller "${PYINSTALLER_ARGS[@]}" # Execute with array expansion
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
