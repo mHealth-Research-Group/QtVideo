@@ -2,7 +2,7 @@
 
 import sys
 import os
-from PySide6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 # Ensure the 'src' directory is in the Python path
 # This allows importing modules from src like 'from src.video_player import VideoPlayerApp'
@@ -17,7 +17,7 @@ try:
 except ImportError as e:
      print(f"Error importing VideoPlayerApp: {e}", file=sys.stderr)
      print("Please ensure 'src' directory exists and contains 'video_player.py'", file=sys.stderr)
-     print("Also check dependencies like PySide6.", file=sys.stderr)
+     print("Also check dependencies like PyQt6.", file=sys.stderr)
      sys.exit(1)
 
 if __name__ == '__main__':

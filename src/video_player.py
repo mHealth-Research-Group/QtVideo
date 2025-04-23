@@ -6,13 +6,13 @@ from zipfile import ZipFile
 import os
 import sys
 
-# PySide6 imports
-from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+# PyQt6 imports
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QSlider, QPushButton, QFileDialog, QLabel, QMessageBox,
                              QMenu, QApplication)
-from PySide6.QtCore import Qt, QUrl, QTime, QTimer, Slot, QObject
-from PySide6.QtGui import QKeyEvent, QPainter, QAction, QPalette 
-from PySide6.QtQuickWidgets import QQuickWidget
+from PyQt6.QtCore import Qt, QUrl, QTime, QTimer, QObject
+from PyQt6.QtGui import QKeyEvent, QPainter, QAction, QPalette 
+from PyQt6.QtQuickWidgets import QQuickWidget
 
 
 from src.models import TimelineAnnotation
@@ -119,12 +119,12 @@ class VideoPlayerApp(QMainWindow):
         print("--- setupUI: Creating QQuickWidgets...")
         left_video_container = QWidget(); left_video_layout = QVBoxLayout(left_video_container); left_video_layout.setContentsMargins(0, 0, 0, 0)
         self.quick_widget_main = QQuickWidget(self)
-        self.quick_widget_main.setResizeMode(QQuickWidget.SizeRootObjectToView)
+        self.quick_widget_main.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
         
-        self.quick_widget_main.setAttribute(Qt.WA_AlwaysStackOnTop, False)
-        self.quick_widget_main.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.quick_widget_main.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, False)
+        self.quick_widget_main.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         palette_main = self.quick_widget_main.palette()
-        palette_main.setColor(QPalette.ColorRole.Window, Qt.black) 
+        palette_main.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.black) 
         self.quick_widget_main.setPalette(palette_main)
         self.quick_widget_main.setAutoFillBackground(True)
         
@@ -134,12 +134,12 @@ class VideoPlayerApp(QMainWindow):
         right_video_layout = QVBoxLayout(right_video_container); 
         right_video_layout.setContentsMargins(0, 0, 0, 0)
         self.quick_widget_preview = QQuickWidget(self)
-        self.quick_widget_preview.setResizeMode(QQuickWidget.SizeRootObjectToView)
+        self.quick_widget_preview.setResizeMode(QQuickWidget.ResizeMode.SizeRootObjectToView)
         
-        self.quick_widget_preview.setAttribute(Qt.WA_AlwaysStackOnTop, False)
-        self.quick_widget_preview.setAttribute(Qt.WA_TranslucentBackground, False)
+        self.quick_widget_preview.setAttribute(Qt.WidgetAttribute.WA_AlwaysStackOnTop, False)
+        self.quick_widget_preview.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         palette_preview = self.quick_widget_preview.palette()
-        palette_preview.setColor(QPalette.ColorRole.Window, Qt.black) 
+        palette_preview.setColor(QPalette.ColorRole.Window, Qt.GlobalColor.black) 
         self.quick_widget_preview.setPalette(palette_preview)
         self.quick_widget_preview.setAutoFillBackground(True)
         
@@ -244,7 +244,8 @@ class VideoPlayerApp(QMainWindow):
         self.second_timeline_widget = TimelineWidget(self, show_position=True, is_main_timeline=False)
         second_timeline_layout.addWidget(self.second_timeline_widget)
         second_timeline_layout.addWidget(self.second_timeline)
-        self.time_label = QLabel("00:00:00 / 00:00:00"); self.time_label.setAlignment(Qt.AlignCenter)
+        self.time_label = QLabel("00:00:00 / 00:00:00"); 
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         second_timeline_layout.addWidget(self.time_label)
         timelines_layout.addWidget(second_timeline_container)
         layout.addWidget(timelines_container, stretch=0)
@@ -304,12 +305,19 @@ class VideoPlayerApp(QMainWindow):
             QPushButton:hover { background-color: #357abd; } QPushButton:pressed { background-color: #2a5f9e; }
             QPushButton:disabled { background-color: #555; color: #999; }
         """)
-        controls_layout = QHBoxLayout(controls_container); controls_layout.setSpacing(10); controls_layout.setContentsMargins(12, 8, 12, 8)
+        controls_layout = QHBoxLayout(controls_container); controls_layout.setSpacing(10); 
+        controls_layout.setContentsMargins(12, 8, 12, 8)
         
-        left_controls = QWidget(); left_layout = QHBoxLayout(left_controls); left_layout.setSpacing(10); left_layout.setContentsMargins(0, 0, 0, 0)
-        self.play_pause_button = QPushButton("Play"); self.play_pause_button.setToolTip("Play/Pause the video (Spacebar)"); self.play_pause_button.setEnabled(False) 
-        self.speed_label = QLabel("1.0x"); self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }"); self.speed_label.setAlignment(Qt.AlignCenter)
-        left_layout.addWidget(self.play_pause_button); left_layout.addWidget(self.speed_label)
+        left_controls = QWidget(); left_layout = QHBoxLayout(left_controls); 
+        left_layout.setSpacing(10); left_layout.setContentsMargins(0, 0, 0, 0)
+        self.play_pause_button = QPushButton("Play"); 
+        self.play_pause_button.setToolTip("Play/Pause the video (Spacebar)"); 
+        self.play_pause_button.setEnabled(False) 
+        self.speed_label = QLabel("1.0x"); 
+        self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }"); 
+        self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(self.play_pause_button); 
+        left_layout.addWidget(self.speed_label)
         
         right_controls = QWidget(); right_layout = QHBoxLayout(right_controls); right_layout.setSpacing(10); right_layout.setContentsMargins(0, 0, 0, 0)
         self.open_button = QPushButton("Open Video"); self.open_button.setToolTip("Open a video file for annotation")
@@ -371,7 +379,7 @@ class VideoPlayerApp(QMainWindow):
             col_layout.addWidget(header)
             for sc_text in shortcuts:
                 label = QLabel(sc_text); label.setProperty("isShortcut", True)
-                label.setTextInteractionFlags(Qt.NoTextInteraction)
+                label.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
                 col_layout.addWidget(label)
             col_layout.addStretch()
             parent_layout.addWidget(col_widget)
@@ -399,7 +407,7 @@ class VideoPlayerApp(QMainWindow):
 
 
     
-    @Slot(QQuickWidget.Status)
+    
     def onQmlMainStatusChanged(self, status):
         is_already_ready = self._qml_main_ready
         if status == QQuickWidget.Status.Ready and is_already_ready:
@@ -418,14 +426,14 @@ class VideoPlayerApp(QMainWindow):
                 if self.qml_root_main:
                     self._qml_main_ready = True
                     print("--- Connecting QML signals for Main...")
-                    try: 
-                        self.qml_root_main.qmlPositionChanged.disconnect(self.qmlPositionChanged)
-                        self.qml_root_main.qmlDurationChanged.disconnect(self.qmlDurationChanged)
-                        self.qml_root_main.qmlPlaybackStateChanged.disconnect(self.qmlPlaybackStateChanged)
-                        self.qml_root_main.qmlMediaStatusChanged.disconnect(self.qmlMediaStatusChanged)
-                        self.qml_root_main.qmlErrorOccurred.disconnect(self.qmlErrorOccurred)
-                        self.qml_root_main.qmlPlaybackRateChanged.disconnect(self.qmlPlaybackRateChanged)
-                    except RuntimeError: pass 
+                    # try: 
+                    #     self.qml_root_main.qmlPositionChanged.disconnect(self.qmlPositionChanged)
+                    #     self.qml_root_main.qmlDurationChanged.disconnect(self.qmlDurationChanged)
+                    #     self.qml_root_main.qmlPlaybackStateChanged.disconnect(self.qmlPlaybackStateChanged)
+                    #     self.qml_root_main.qmlMediaStatusChanged.disconnect(self.qmlMediaStatusChanged)
+                    #     self.qml_root_main.qmlErrorOccurred.disconnect(self.qmlErrorOccurred)
+                    #     self.qml_root_main.qmlPlaybackRateChanged.disconnect(self.qmlPlaybackRateChanged)
+                    # except RuntimeError: pass 
                     self.qml_root_main.qmlPositionChanged.connect(self.qmlPositionChanged)
                     self.qml_root_main.qmlDurationChanged.connect(self.qmlDurationChanged)
                     self.qml_root_main.qmlPlaybackStateChanged.connect(self.qmlPlaybackStateChanged)
@@ -443,7 +451,7 @@ class VideoPlayerApp(QMainWindow):
             QMessageBox.critical(self, "QML Error", "Failed to load main video player QML component.")
             self._qml_main_ready = False
 
-    @Slot(QQuickWidget.Status)
+    
     def onQmlPreviewStatusChanged(self, status):
         is_already_ready = self._qml_preview_ready
         if status == QQuickWidget.Status.Ready and is_already_ready:
@@ -528,7 +536,7 @@ class VideoPlayerApp(QMainWindow):
 
 
     
-    @Slot(float)
+    
     def qmlPositionChanged(self, position):
         self.media_player['_position'] = int(position) 
         if not self.timeline.isSliderDown():
@@ -557,7 +565,7 @@ class VideoPlayerApp(QMainWindow):
         
         
 
-    @Slot(float)
+    
     def qmlDurationChanged(self, duration):
         new_duration = int(duration) 
         if new_duration != self.media_player['_duration']:
@@ -583,7 +591,7 @@ class VideoPlayerApp(QMainWindow):
             if hasattr(self, 'second_timeline_widget'): self.second_timeline_widget.update()
 
 
-    @Slot(int)
+    
     def qmlPlaybackStateChanged(self, state):
         
         if state != self.media_player['_playback_state']:
@@ -593,14 +601,14 @@ class VideoPlayerApp(QMainWindow):
              self.media_player['_playback_state'] = state
              self.updatePlayPauseButton(state)
 
-    @Slot(float)
+    
     def qmlPlaybackRateChanged(self, rate):
         if rate != self.media_player['_playback_rate']:
              print(f"--- Playback rate changed (from QML): {rate}")
              self.media_player['_playback_rate'] = rate
              self.updateSpeedLabel(rate)
 
-    @Slot(int)
+    
     def qmlMediaStatusChanged(self, status):
         
         status_map = {0:"NoMedia", 1:"LoadingMedia", 2:"LoadedMedia", 3:"Prepared", 4:"BufferingMedia", 5:"StalledMedia", 6:"EndOfMedia", 7:"InvalidMedia"}
@@ -631,7 +639,7 @@ class VideoPlayerApp(QMainWindow):
              self.second_timeline.setEnabled(False)
 
 
-    @Slot(int, str)
+    
     def qmlErrorOccurred(self, error, errorString):
         
         
@@ -654,7 +662,7 @@ class VideoPlayerApp(QMainWindow):
 
     
 
-    @Slot()
+    
     def openFile(self):
         print("--- openFile triggered")
         
@@ -677,8 +685,8 @@ class VideoPlayerApp(QMainWindow):
                 if self.video_hash != 0 and not hash_matches:
                     message += "\nWarning: The video file appears to have changed since the autosave."
                 message += "\nWould you like to restore from autosave or start over?"
-                reply = QMessageBox.question(self, "Autosave Found", message, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-                if reply == QMessageBox.Yes:
+                reply = QMessageBox.question(self, "Autosave Found", message, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+                if reply == QMessageBox.StandardButton.Yes:
                     try: 
                         print("--- Restoring annotations from autosave...")
                         loaded_count = 0
@@ -724,7 +732,7 @@ class VideoPlayerApp(QMainWindow):
              print("--- File selection cancelled.")
 
 
-    @Slot()
+    
     def togglePlayPause(self):
         if not self.qml_root_main or not self.current_video_path:
              print("--- togglePlayPause: Aborted (QML main root missing or no video path)")
@@ -743,7 +751,7 @@ class VideoPlayerApp(QMainWindow):
             self.qml_root_preview.play()
 
 
-    @Slot(int)
+    
     def updatePlayPauseButton(self, state):
         
         self.play_pause_button.setText("Pause" if state == 1 else "Play")
@@ -762,7 +770,7 @@ class VideoPlayerApp(QMainWindow):
             print("--- adjustPreviewOffset: QML preview root missing.")
 
 
-    @Slot(float)
+    
     def updateSpeedLabel(self, rate):
         self.speed_label.setText(f"{rate:.1f}x")
 
@@ -942,7 +950,7 @@ class VideoPlayerApp(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to export annotations: {str(e)}")
     
-    @Slot()
+    
     def autosave(self):
         """Trigger autosave of current annotations"""
         if hasattr(self, 'current_video_path') and self.current_video_path:
@@ -952,7 +960,7 @@ class VideoPlayerApp(QMainWindow):
                 video_hash=self.video_hash
             )
     
-    @Slot()
+    
     def rotateVideo(self):
         """Rotates the video display using QML orientation."""
         if not self.qml_root_main or not self.qml_root_preview:
@@ -964,7 +972,7 @@ class VideoPlayerApp(QMainWindow):
         self.qml_root_main.setProperty('orientation', self.current_rotation)
         self.qml_root_preview.setProperty('orientation', self.current_rotation)
     
-    @Slot()
+    
     def toggleShortcutsWidget(self):
         print("--- toggleShortcutsWidget called ---")
         if hasattr(self, 'shortcuts_container'):
@@ -1010,12 +1018,12 @@ class VideoPlayerApp(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to load annotations: {str(e)}")
 
     
-    @Slot()
+    
     def sliderPressed(self):
         
         pass 
 
-    @Slot()
+    
     def sliderReleased(self):
         
         
@@ -1026,7 +1034,7 @@ class VideoPlayerApp(QMainWindow):
                 self.seekFromSlider(slider.value()) 
         pass
 
-    @Slot(int)
+    
     def seekFromSlider(self, value):
         """Seeks the main player based on slider movement (value is in ms)."""
         if not self.qml_root_main: return
@@ -1053,21 +1061,21 @@ class VideoPlayerApp(QMainWindow):
             else: return
     
     
-    @Slot()
+    
     def toggleAnnotation(self): self.annotation_manager.toggleAnnotation()
-    @Slot()
+    
     def editAnnotation(self): self.annotation_manager.editAnnotation()
-    @Slot()
+    
     def cancelAnnotation(self): self.annotation_manager.cancelAnnotation()
-    @Slot()
+    
     def deleteCurrentLabel(self): self.annotation_manager.deleteCurrentLabel()
-    @Slot()
+    
     def moveToPreviousLabel(self): self.annotation_manager.moveToPreviousLabel()
-    @Slot()
+    
     def moveToNextLabel(self): self.annotation_manager.moveToNextLabel()
-    @Slot()
+    
     def mergeWithPrevious(self): self.annotation_manager.mergeWithPrevious()
-    @Slot()
+    
     def mergeWithNext(self): self.annotation_manager.mergeWithNext()
-    @Slot()
+    
     def splitCurrentLabel(self): self.annotation_manager.splitCurrentLabel()

@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QWidget
-from PySide6.QtCore import Qt, QPointF, QRectF
-from PySide6.QtGui import QPainter, QPen, QColor, QLinearGradient
+from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import Qt, QPointF, QRectF
+from PyQt6.QtGui import QPainter, QPen, QColor, QLinearGradient
 import json
 
 class TimelineWidget(QWidget):

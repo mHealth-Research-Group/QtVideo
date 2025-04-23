@@ -1,4 +1,4 @@
-from PySide6.QtGui import QAction
+from PyQt6.QtGui import QAction
 
 class ShortcutManager:
     def __init__(self, app):
