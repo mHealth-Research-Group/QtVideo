@@ -10,25 +10,33 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    
     steps:
     - uses: actions/checkout@v4
-    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
     - name: Install dependencies
+      shell: bash
       run: |
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-      
-    - name: Build with PyInstaller
+    - name: Build with PyInstaller and Bundle Multimedia Plugin
+      shell: bash
       run: |
-        pyinstaller --name qtwebscrub --windowed --onefile --add-data "src/VideoPlayer.qml:src" main.py
-        
+        PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))" | sed 's/\\/\//g')
+        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -iname 'wmfmediaplugin.dll' -print -quit)
+        if [ -z "$PLUGIN_PATH" ]; then
+          echo "Error: Could not find wmfmediaplugin.dll in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
+          exit 1
+        fi
+        echo "Found WMF plugin at: $PLUGIN_PATH"
+        # On Windows, --add-binary uses ';' as separator, --add-data also uses ';'
+        pyinstaller --name qtwebscrub --windowed --onefile \
+          --add-data "src/VideoPlayer.qml;src" \
+          --add-binary "$PLUGIN_PATH;PyQt6/Qt6/plugins/multimedia" \
+          main.py
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
@@ -37,33 +45,38 @@ jobs:
 
   build-macos-intel:
     runs-on: macos-13
-    
     steps:
     - uses: actions/checkout@v4
-    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-        
-    - name: Build with PyInstaller
+    - name: Build with PyInstaller and Bundle Multimedia Plugin
+      shell: bash
       run: |
-        pyinstaller --name qtwebscrub --windowed --onedir --add-data "src/VideoPlayer.qml:src" main.py
-        
+        PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
+        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -name 'avfmediaplugin.dylib' -print -quit)
+        if [ -z "$PLUGIN_PATH" ]; then
+          echo "Error: Could not find avfmediaplugin.dylib in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
+          exit 1
+        fi
+        echo "Found AVF plugin at: $PLUGIN_PATH"
+        # On macOS/Linux, --add-binary uses ':' as separator, --add-data also uses ':'
+        pyinstaller --name qtwebscrub --windowed --onedir \
+          --add-data "src/VideoPlayer.qml:src" \
+          --add-binary "$PLUGIN_PATH:PyQt6/Qt6/plugins/multimedia" \
+          main.py
     - name: Install create-dmg
       run: |
         brew install create-dmg
-        
     - name: Create DMG
       run: |
         create-dmg --volname "QTWebScrub" --window-pos 200 120 --window-size 600 300 --icon-size 100 --app-drop-link 425 120 "dist/QTWebScrub.dmg" "dist/qtwebscrub.app"
-        
     - name: Upload macOS artifact
       uses: actions/upload-artifact@v4
       with:
@@ -71,34 +84,39 @@ jobs:
         path: dist/QTWebScrub.dmg
 
   build-macos-arm:
-    runs-on: macos-14  # macOS M1 runner
-    
+    runs-on: macos-14
     steps:
     - uses: actions/checkout@v4
-    
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-        
-    - name: Build with PyInstaller
+    - name: Build with PyInstaller and Bundle Multimedia Plugin
+      shell: bash
       run: |
-        pyinstaller --name qtwebscrub --windowed --onedir --add-data "src/VideoPlayer.qml:src" main.py
-        
+        PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
+        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -name 'avfmediaplugin.dylib' -print -quit)
+        if [ -z "$PLUGIN_PATH" ]; then
+          echo "Error: Could not find avfmediaplugin.dylib in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
+          exit 1
+        fi
+        echo "Found AVF plugin at: $PLUGIN_PATH"
+        # On macOS/Linux, --add-binary uses ':' as separator, --add-data also uses ':'
+        pyinstaller --name qtwebscrub --windowed --onedir \
+          --add-data "src/VideoPlayer.qml:src" \
+          --add-binary "$PLUGIN_PATH:PyQt6/Qt6/plugins/multimedia" \
+          main.py
     - name: Install create-dmg
       run: |
         brew install create-dmg
-        
     - name: Create DMG
       run: |
         create-dmg --volname "QTWebScrub" --window-pos 200 120 --window-size 600 300 --icon-size 100 --app-drop-link 425 120 "dist/QTWebScrub.dmg" "dist/qtwebscrub.app"
-        
     - name: Upload macOS artifact
       uses: actions/upload-artifact@v4
       with:
@@ -107,25 +125,36 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    
     steps:
     - uses: actions/checkout@v4
-    
+    - name: Install Multimedia System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgstreamer1.0-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav libgstreamer-gl1.0-0 libqt6multimedia6-plugins libcanberra-gtk-module
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install PyQt6 PyInstaller
         pip install -r requirements.txt
-        
-    - name: Build with PyInstaller
+    - name: Build with PyInstaller and Bundle Multimedia Plugin
+      shell: bash
       run: |
-        pyinstaller --name qtwebscrub --windowed --onefile --add-data "src/VideoPlayer.qml:src" main.py
-        
+        PYQT6_DIR=$(python -c "import PyQt6; import os; print(os.path.dirname(PyQt6.__file__))")
+        PLUGIN_PATH=$(find "$PYQT6_DIR/Qt6/plugins/multimedia" -maxdepth 1 -name 'libgstmediaplugin.so' -print -quit)
+        if [ -z "$PLUGIN_PATH" ]; then
+          echo "Error: Could not find libgstmediaplugin.so in $PYQT6_DIR/Qt6/plugins/multimedia" >&2
+          exit 1
+        fi
+        echo "Found GStreamer plugin at: $PLUGIN_PATH"
+        # On macOS/Linux, --add-binary uses ':' as separator, --add-data also uses ':'
+        pyinstaller --name qtwebscrub --windowed --onefile \
+          --add-data "src/VideoPlayer.qml:src" \
+          --add-binary "$PLUGIN_PATH:PyQt6/Qt6/plugins/multimedia" \
+          main.py
     - name: Upload Linux artifact
       uses: actions/upload-artifact@v4
       with:
