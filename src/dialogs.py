@@ -329,13 +329,6 @@ class AnnotationDialog(QDialog):
             QComboBox:focus {
                 border-color: #5d5d5d;
             }
-            QComboBox QAbstractItemView {
-                background-color: #2d2d2d;
-                border: 1px solid #3d3d3d;
-                color: #ffffff;
-                selection-background-color: #404040;
-                padding: 4px;
-            }
             QLineEdit {
                 padding: 10px;
                 background-color: #2d2d2d;
