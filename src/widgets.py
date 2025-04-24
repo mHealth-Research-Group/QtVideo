@@ -6,7 +6,7 @@ import json
 class TimelineWidget(QWidget):
     def __init__(self, parent=None, show_position=False, is_main_timeline=True):
         super().__init__(parent)
-        self.parent = parent
+        self.app = parent
         self.show_position = show_position
         self.is_main_timeline = is_main_timeline
         self.setMinimumHeight(60)
@@ -18,16 +18,16 @@ class TimelineWidget(QWidget):
     
         
     def mousePressEvent(self, event):
-        if not hasattr(self.parent, 'media_player'):
+        if not hasattr(self.app, 'media_player'):
             return
             
-        duration = self.parent.media_player.duration() / 1000 or 1
+        duration = self.app.media_player['_duration'] / 1000 or 1
         x = event.position().x()
         width_percent = x / self.width()
 
         if self.is_main_timeline:
-            zoom_start_x = self.parent.zoom_start * self.width()
-            zoom_end_x = self.parent.zoom_end * self.width()
+            zoom_start_x = self.app.zoom_start * self.width()
+            zoom_end_x = self.app.zoom_end * self.width()
             
             if abs(x - zoom_start_x) < 5:
                 self.dragging = 'zoom_start'
@@ -37,14 +37,14 @@ class TimelineWidget(QWidget):
                 return
         
         # Check if clicking near annotation edges
-        for annotation in self.parent.annotations:
+        for annotation in self.app.annotations:
             if self.is_main_timeline:
                 start_x = (annotation.start_time / duration) * self.width()
                 end_x = (annotation.end_time / duration) * self.width()
             else:
                 # Adjust coordinates w
-                visible_duration = (self.parent.zoom_end - self.parent.zoom_start) * duration
-                visible_start = self.parent.zoom_start * duration
+                visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                visible_start = self.app.zoom_start * duration
                 
                 if visible_duration > 0:
                     # Convert annotation times to relative positions in zoomed view
@@ -72,10 +72,10 @@ class TimelineWidget(QWidget):
         self.update()
         
     def mouseMoveEvent(self, event):
-        if not hasattr(self.parent, 'media_player'):
+        if not hasattr(self.app, 'media_player'):
             return
             
-        duration = self.parent.media_player.duration() / 1000 or 1
+        duration = self.app.media_player['_duration'] / 1000 or 1
         x = event.position().x()
         
         if not self.dragging:
@@ -85,15 +85,15 @@ class TimelineWidget(QWidget):
             width_percent = max(0.0, min(1.0, x / self.width()))
             
             if self.dragging == 'zoom_start':
-                if width_percent < self.parent.zoom_end - 0.05:
-                    self.parent.zoom_start = width_percent
-                    self.parent.timeline_widget.update()
-                    self.parent.second_timeline_widget.update()
+                if width_percent < self.app.zoom_end - 0.05:
+                    self.app.zoom_start = width_percent
+                    self.app.timeline_widget.update()
+                    self.app.second_timeline_widget.update()
             else:  # zoom_end
-                if width_percent > self.parent.zoom_start + 0.05: 
-                    self.parent.zoom_end = width_percent
-                    self.parent.timeline_widget.update()
-                    self.parent.second_timeline_widget.update()
+                if width_percent > self.app.zoom_start + 0.05: 
+                    self.app.zoom_end = width_percent
+                    self.app.timeline_widget.update()
+                    self.app.second_timeline_widget.update()
             return
             
         # Handle annotation dragging
@@ -102,11 +102,11 @@ class TimelineWidget(QWidget):
             if self.is_main_timeline:
                 new_time = (x / self.width()) * duration
             else:
-                visible_duration = (self.parent.zoom_end - self.parent.zoom_start) * duration
-                visible_start = self.parent.zoom_start * duration
+                visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                visible_start = self.app.zoom_start * duration
                 new_time = visible_start + (x / self.width()) * visible_duration
         
-            sorted_annotations = sorted(self.parent.annotations, key=lambda x: x.start_time)
+            sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
             current_index = sorted_annotations.index(annotation)
             
             if edge == 'start':
@@ -130,20 +130,20 @@ class TimelineWidget(QWidget):
                         
                 annotation.end_time = min(duration, new_time)
             
-            self.parent.timeline_widget.update()
-            self.parent.second_timeline_widget.update()
+            self.app.timeline_widget.update()
+            self.app.second_timeline_widget.update()
         else:
             old_hover = self.hover_edge
             self.hover_edge = None
             
-            for annotation in self.parent.annotations:
+            for annotation in self.app.annotations:
                 if self.is_main_timeline:
                     start_x = (annotation.start_time / duration) * self.width()
                     end_x = (annotation.end_time / duration) * self.width()
                 else:
                     # Adjust coordinates for zoomed view
-                    visible_duration = (self.parent.zoom_end - self.parent.zoom_start) * duration
-                    visible_start = self.parent.zoom_start * duration
+                    visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                    visible_start = self.app.zoom_start * duration
                     
                     if visible_duration > 0:
                         relative_start = (annotation.start_time - visible_start) / visible_duration
@@ -178,14 +178,14 @@ class TimelineWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        if not hasattr(self.parent, 'media_player'):
+        if not hasattr(self.app, 'media_player'):
             return
             
-        duration = self.parent.media_player.duration() / 1000 or 1
+        duration = self.app.media_player['_duration'] / 1000 or 1
 
         if not self.is_main_timeline:
-            visible_duration = (self.parent.zoom_end - self.parent.zoom_start) * duration
-            visible_start = self.parent.zoom_start * duration
+            visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+            visible_start = self.app.zoom_start * duration
         
         painter.setPen(Qt.PenStyle.NoPen)
         if self.show_position:
@@ -194,10 +194,10 @@ class TimelineWidget(QWidget):
             
             if duration > 0:
                 if self.is_main_timeline:
-                    progress_width = (self.parent.media_player.position() / (duration * 1000)) * self.width()
+                    progress_width = (self.app.media_player['_position'] / (duration * 1000)) * self.width()
                 else:
     
-                    position = self.parent.media_player.position() / 1000  # Convert to seconds
+                    position = self.app.media_player['_position'] / 1000  # Convert to seconds
                     if visible_duration > 0:  # Prevent division by zero
                         relative_pos = (position - visible_start) / visible_duration
                         progress_width = relative_pos * self.width()
@@ -216,9 +216,9 @@ class TimelineWidget(QWidget):
             y_pos = self.height() / 2
             painter.drawLine(QPointF(0, y_pos), QPointF(self.width(), y_pos))
             if self.is_main_timeline:
-                current_pos = (self.parent.media_player.position() / (duration * 1000)) * self.width()
+                current_pos = (self.app.media_player['_position'] / (duration * 1000)) * self.width()
             else:
-                position = self.parent.media_player.position() / 1000
+                position = self.app.media_player['_position'] / 1000
                 relative_pos = (position - visible_start) / visible_duration
                 current_pos = relative_pos * self.width()
                 
@@ -227,8 +227,8 @@ class TimelineWidget(QWidget):
                 painter.drawLine(QPointF(current_pos, 0), QPointF(current_pos, self.height()))
 
             if self.is_main_timeline:
-                zoom_start_x = self.parent.zoom_start * self.width()
-                zoom_end_x = self.parent.zoom_end * self.width()
+                zoom_start_x = self.app.zoom_start * self.width()
+                zoom_end_x = self.app.zoom_end * self.width()
             
                 painter.setPen(QPen(QColor(255, 0, 0), 2))
                 painter.drawLine(QPointF(zoom_start_x, 0), QPointF(zoom_start_x, self.height()))
@@ -255,7 +255,7 @@ class TimelineWidget(QWidget):
                     comment_data = json.loads(annotation.comments[0]["body"])
                     posture = next((item["selectedValue"] for item in comment_data if item["category"] == "POSTURE"), None)
                     if posture:
-                        color_str = self.parent.annotation_manager.get_posture_color(posture)
+                        color_str = self.app.annotation_manager.get_posture_color(posture)
                         base_color = QColor(color_str)
                 except Exception as e:
                     print(f"Error getting annotation color: {str(e)}")
@@ -292,14 +292,14 @@ class TimelineWidget(QWidget):
                     painter.drawLine(QPointF(end_x, y_pos + height), QPointF(end_x, y_pos + height + marker_height))
         
         # Draw current annotation start line
-        if hasattr(self.parent, 'current_annotation') and self.parent.current_annotation:
+        if hasattr(self.app, 'current_annotation') and self.app.current_annotation:
             if self.is_main_timeline:
-                start_x = (self.parent.current_annotation.start_time / duration) * self.width()
+                start_x = (self.app.current_annotation.start_time / duration) * self.width()
             else:
-                visible_duration = (self.parent.zoom_end - self.parent.zoom_start) * duration
-                visible_start = self.parent.zoom_start * duration
+                visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                visible_start = self.app.zoom_start * duration
                 if visible_duration > 0:
-                    relative_start = (self.parent.current_annotation.start_time - visible_start) / visible_duration
+                    relative_start = (self.app.current_annotation.start_time - visible_start) / visible_duration
                     start_x = relative_start * self.width()
                     
                     if 0 <= start_x <= self.width():
@@ -310,15 +310,15 @@ class TimelineWidget(QWidget):
                 painter.setPen(QPen(QColor(0, 255, 0), 2))
                 painter.drawLine(QPointF(start_x, 0), QPointF(start_x, self.height()))
 
-        if hasattr(self.parent, 'annotations'):
-            for annotation in self.parent.annotations:
+        if hasattr(self.app, 'annotations'):
+            for annotation in self.app.annotations:
                 if self.is_main_timeline:
                     start_x = (annotation.start_time / duration) * self.width()
                     end_x = (annotation.end_time / duration) * self.width()
                 else:
                     # Adjust annotation positions for zoomed view
-                    visible_duration = (self.parent.zoom_end - self.parent.zoom_start) * duration
-                    visible_start = self.parent.zoom_start * duration
+                    visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                    visible_start = self.app.zoom_start * duration
                   
                     relative_start = (annotation.start_time - visible_start) / visible_duration
                     relative_end = (annotation.end_time - visible_start) / visible_duration
