@@ -1123,7 +1123,11 @@ class VideoPlayerApp(QMainWindow):
     
     def toggleAnnotation(self): self.annotation_manager.toggleAnnotation()
     
-    def editAnnotation(self): self.annotation_manager.editAnnotation()
+    def editAnnotation(self): 
+        # Pause the video if it's playing else continue
+        if self.media_player and self.media_player['_playback_state'] == 1:
+            self.play_pause_button.click()
+        self.annotation_manager.editAnnotation()
     
     def cancelAnnotation(self): self.annotation_manager.cancelAnnotation()
     
