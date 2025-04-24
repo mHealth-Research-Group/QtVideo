@@ -731,11 +731,11 @@ class VideoPlayerApp(QMainWindow):
                 # Running in development
                 url = QUrl.fromLocalFile(filename)
             
-            # Check if a file exsists at the path
-            if not os.path.exists(filename):
-                print(f"--- Error: File does not exist at path: {filename}")
-                QMessageBox.critical(self, "File Error", f"The selected file does not exist:\n{filename}")
+            if not url.isValid():
+                print(f"--- Error: Invalid URL generated for file: {filename}")
+                QMessageBox.critical(self, "File Error", f"Invalid file URL generated:\n{url.toString()}")
                 return
+            
             print(f"--- Converted to QUrl: {url.toString()}")
 
             
