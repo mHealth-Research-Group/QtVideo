@@ -1079,16 +1079,15 @@ class VideoPlayerApp(QMainWindow):
             
             # Convert to value in slider range
             value_range = slider.maximum() - slider.minimum()
-            value = slider.minimum() + (relative_pos * value_range)
+            value = int(slider.minimum() + (relative_pos * value_range))
             
             # Update slider and seek
-            slider.setValue(int(value))
+            slider.setValue(value)
             if slider == self.timeline:
                 self.setPosition(value, from_main=True)
             else:
                 self.setPosition(value, from_main=False)
             
-
         QSlider.mousePressEvent(slider, event)
     
     
