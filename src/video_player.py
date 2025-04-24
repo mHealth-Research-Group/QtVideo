@@ -169,6 +169,9 @@ class VideoPlayerApp(QMainWindow):
         main_timeline_container.setMinimumHeight(50)
         self.timeline = QSlider(Qt.Orientation.Horizontal)
         self.timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=True))
+        self.timeline.sliderPressed.connect(self.sliderPressed)
+        self.timeline.sliderReleased.connect(self.sliderReleased)
+        self.timeline.mousePressEvent = lambda e: self.timelineMousePress(e, self.timeline)
         self.timeline.setEnabled(False) 
         self.timeline_widget = TimelineWidget(self, show_position=False, is_main_timeline=True)
         main_timeline_layout = QVBoxLayout(main_timeline_container); 
@@ -223,6 +226,9 @@ class VideoPlayerApp(QMainWindow):
         
         self.second_timeline = QSlider(Qt.Orientation.Horizontal)
         self.second_timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=False))
+        self.second_timeline.sliderPressed.connect(self.sliderPressed)
+        self.second_timeline.sliderReleased.connect(self.sliderReleased)
+        self.second_timeline.mousePressEvent = lambda e: self.timelineMousePress(e, self.second_timeline)
         self.second_timeline.setEnabled(False) 
         
         self.second_timeline.setStyleSheet("""
@@ -824,27 +830,35 @@ class VideoPlayerApp(QMainWindow):
          self.setPlaybackRate(1.0)
 
     def setPosition(self, position, from_main=True):
-            """Sets the position of the QML player."""
-            if not self.qml_root_main or not self.current_video_path: return
-            if from_main:
-                
-                
-                self.qml_root_preview.seek(position + self.PREVIEW_OFFSET) 
-            else:
-                
+        """Sets the position of the QML player."""
+        if not self.qml_root_main or not self.current_video_path: return
+
+        # Calculate target position based on which timeline was used
+        if from_main:
+            target_position = position
+        else:
+            # Convert zoomed timeline position to full timeline position
+            zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
+            zoom_start = self.zoom_start * self.media_player['_duration']
+            max_slider_val = self.second_timeline.maximum()
+            relative_pos_in_zoom = position / max_slider_val if max_slider_val > 0 else 0
+            target_position = int(zoom_start + (relative_pos_in_zoom * zoom_duration))
+        
+        print(f"--- Seeking main player to: {target_position} ms")
+        self.qml_root_main.seek(target_position)
+        self.qml_root_preview.seek(target_position + self.PREVIEW_OFFSET)
+        self.media_player['_position'] = target_position
+
+        if from_main:
+            self.timeline.setValue(target_position)
+            if self.media_player['_duration'] > 0:
                 zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
                 zoom_start = self.zoom_start * self.media_player['_duration']
-                max_slider_val = self.second_timeline.maximum()
-                relative_pos_in_zoom = position / max_slider_val
-                target_position = int(zoom_start + (relative_pos_in_zoom * zoom_duration))
-                print(f"--- Seeking main player to: {target_position} ms")
-                self.qml_root_main.seek(target_position)
-            
-            print(f"--- Seeking QML player to: {position} ms")
-            self.qml_root_main.seek(position)
-            self.qml_root_preview.seek(position + self.PREVIEW_OFFSET) 
-            
-            self.media_player['_position'] = position
+                if target_position >= zoom_start and target_position <= (zoom_start + zoom_duration):
+                    relative_pos = (target_position - zoom_start) / zoom_duration
+                    self.second_timeline.setValue(int(relative_pos * self.second_timeline.maximum()))
+        else:
+            self.timeline.setValue(target_position)
 
     def _setup_timeline_zoom(self):
          """Sets timeline zoom state variables based on duration."""
@@ -1056,30 +1070,26 @@ class VideoPlayerApp(QMainWindow):
         pass
 
     
-    def seekFromSlider(self, value):
-        """Seeks the main player based on slider movement (value is in ms)."""
-        if not self.qml_root_main: return
-        is_seekable = self.qml_root_main.property('isSeekable')
-        if not is_seekable: return
-
-        slider = self.sender()
-        position_to_seek = value 
-
-        if slider == self.second_timeline:
+    def timelineMousePress(self, event, slider):
+        """Custom mouse press handler for timeline sliders"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            pos = event.position().x()
+            width = slider.width()
+            relative_pos = max(0, min(1, pos / width))
             
-            if self.media_player['_duration'] > 0:
-                zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
-                zoom_start = self.zoom_start * self.media_player['_duration']
-                max_slider_val = self.second_timeline.maximum() 
-                
-                
-                
-                
-                
-                
-                position_to_seek = value 
+            # Convert to value in slider range
+            value_range = slider.maximum() - slider.minimum()
+            value = slider.minimum() + (relative_pos * value_range)
+            
+            # Update slider and seek
+            slider.setValue(int(value))
+            if slider == self.timeline:
+                self.setPosition(value, from_main=True)
+            else:
+                self.setPosition(value, from_main=False)
+            
 
-            else: return
+        QSlider.mousePressEvent(slider, event)
     
     
     
