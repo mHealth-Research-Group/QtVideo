@@ -316,18 +316,46 @@ class VideoPlayerApp(QMainWindow):
         
         left_controls = QWidget(); left_layout = QHBoxLayout(left_controls); 
         left_layout.setSpacing(10); left_layout.setContentsMargins(0, 0, 0, 0)
-        self.play_pause_button = QPushButton("Play"); 
-        self.play_pause_button.setToolTip("Play/Pause the video (Spacebar)"); 
-        self.play_pause_button.setEnabled(False) 
-        self.speed_label = QLabel("1.0x"); 
-        self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }"); 
+        self.play_pause_button = QPushButton("Play")
+        self.play_pause_button.setToolTip("Play/Pause the video (Spacebar)")
+        self.play_pause_button.setEnabled(False)
+        
+        self.speed_label = QLabel("1.0x")
+        self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }")
         self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(self.play_pause_button); 
+        
+        self.preview_offset_label = QLabel(f"Skip: {self.PREVIEW_OFFSET}ms")
+        self.preview_offset_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; text-align: center; }")
+        self.preview_offset_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        left_layout.addWidget(self.play_pause_button)
         left_layout.addWidget(self.speed_label)
+        left_layout.addWidget(self.preview_offset_label)
         
         right_controls = QWidget(); right_layout = QHBoxLayout(right_controls); right_layout.setSpacing(10); right_layout.setContentsMargins(0, 0, 0, 0)
         self.open_button = QPushButton("Open Video"); self.open_button.setToolTip("Open a video file for annotation")
-        self.gear_button = QPushButton("⚙"); self.gear_button.setToolTip("Settings"); self.gear_button.setStyleSheet("QPushButton { padding: 8px 12px; background-color: #4a90e2; color: white; border: none; border-radius: 4px; font-size: 16px; min-width: 40px; } QPushButton:hover { background-color: #357abd; } QPushButton:pressed { background-color: #2a5f9e; }")
+        self.gear_button = QPushButton("⚙")
+        self.gear_button.setToolTip("Settings")
+        self.gear_button.setStyleSheet("""
+            QPushButton {
+                padding: 8px 12px;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                min-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #357abd;
+            }
+            QPushButton:pressed {
+                background-color: #2a5f9e;
+            }
+            QPushButton::menu-indicator {
+                width: 0px;
+            }
+        """)
         right_layout.addWidget(self.open_button); right_layout.addWidget(self.gear_button)
         controls_layout.addWidget(left_controls); controls_layout.addStretch(); controls_layout.addWidget(right_controls)
         layout.addWidget(controls_container)
@@ -793,6 +821,7 @@ class VideoPlayerApp(QMainWindow):
         if self.qml_root_preview:
             self._sync_preview_qml_position(self.media_player['_position'])
             print(f"--- Adjusted preview offset to: {self.PREVIEW_OFFSET} ms")
+            self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
         else:
             print("--- adjustPreviewOffset: QML preview root missing.")
 
