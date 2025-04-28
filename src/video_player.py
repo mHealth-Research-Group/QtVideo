@@ -27,6 +27,7 @@ class VideoPlayerApp(QMainWindow):
     
     SYNC_THRESHOLD = 150
     MIN_ZOOM_DURATION = 600000 # 10 minutes in ms
+    BASE_PREVIEW_OFFSET = 2000  # 2 seconds in ms
 
     def __init__(self):
         super().__init__()
@@ -42,7 +43,7 @@ class VideoPlayerApp(QMainWindow):
         self.current_annotation = None 
         self.zoom_start = 0.0 
         self.zoom_end = 1.0 
-        self.PREVIEW_OFFSET = 3000 
+        self.PREVIEW_OFFSET = self.BASE_PREVIEW_OFFSET
 
         
         self.autosave_timer = QTimer(self)
@@ -642,11 +643,19 @@ class VideoPlayerApp(QMainWindow):
              self.updatePlayPauseButton(state)
 
     
+    def _calculate_preview_offset(self):
+        """Calculates the preview offset based on current playback speed."""
+        return int(self.BASE_PREVIEW_OFFSET * self.media_player['_playback_rate'])
+
     def qmlPlaybackRateChanged(self, rate):
         if rate != self.media_player['_playback_rate']:
              print(f"--- Playback rate changed (from QML): {rate}")
              self.media_player['_playback_rate'] = rate
              self.updateSpeedLabel(rate)
+             # Update preview offset based on new speed
+             self.PREVIEW_OFFSET = self._calculate_preview_offset()
+             self._sync_preview_qml_position(self.media_player['_position'])
+             self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
 
     
     def qmlMediaStatusChanged(self, status):
@@ -816,11 +825,13 @@ class VideoPlayerApp(QMainWindow):
         self.play_pause_button.setEnabled(media_has_duration and qml_ready)
     
     def adjustPreviewOffset(self, offset):
-        """Adjusts the preview offset for the QML player."""
-        self.PREVIEW_OFFSET = max(0,  self.PREVIEW_OFFSET + offset)
+        """Adjusts the base preview offset for the QML player."""
+        base_offset_change = offset / self.media_player['_playback_rate']  # Compensate for speed scaling
+        self.BASE_PREVIEW_OFFSET = max(0, self.BASE_PREVIEW_OFFSET + base_offset_change)
+        self.PREVIEW_OFFSET = self._calculate_preview_offset()
         if self.qml_root_preview:
             self._sync_preview_qml_position(self.media_player['_position'])
-            print(f"--- Adjusted preview offset to: {self.PREVIEW_OFFSET} ms")
+            print(f"--- Adjusted base preview offset to: {self.BASE_PREVIEW_OFFSET} ms (effective: {self.PREVIEW_OFFSET} ms)")
             self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
         else:
             print("--- adjustPreviewOffset: QML preview root missing.")
@@ -832,15 +843,15 @@ class VideoPlayerApp(QMainWindow):
 
     def setPlaybackRate(self, rate):
         """Sets the playback rate on the QML player."""
-        if self.qml_root_main:
-             
+        if self.qml_root_main:            
              clamped_rate = max(0.1, min(rate, 16.0)) 
              if clamped_rate != self.media_player['_playback_rate']:
                  print(f"--- Setting playback rate via Python: {clamped_rate}")
                  self.qml_root_main.setProperty('playbackRate', clamped_rate)
-                 
                  self.updateSpeedLabel(clamped_rate)
-                 
+                 # Update preview offset based on new speed
+                 self.PREVIEW_OFFSET = self._calculate_preview_offset()
+                 self._sync_preview_qml_position(self.media_player['_position'])
         if self.qml_root_preview:
             
             self.qml_root_preview.setProperty('playbackRate', clamped_rate)
