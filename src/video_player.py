@@ -27,6 +27,7 @@ class VideoPlayerApp(QMainWindow):
     
     SYNC_THRESHOLD = 150
     MIN_ZOOM_DURATION = 600000 # 10 minutes in ms
+    BASE_PREVIEW_OFFSET = 2000  # 2 seconds in ms
 
     def __init__(self):
         super().__init__()
@@ -42,7 +43,7 @@ class VideoPlayerApp(QMainWindow):
         self.current_annotation = None 
         self.zoom_start = 0.0 
         self.zoom_end = 1.0 
-        self.PREVIEW_OFFSET = 3000 
+        self.PREVIEW_OFFSET = self.BASE_PREVIEW_OFFSET
 
         
         self.autosave_timer = QTimer(self)
@@ -316,18 +317,46 @@ class VideoPlayerApp(QMainWindow):
         
         left_controls = QWidget(); left_layout = QHBoxLayout(left_controls); 
         left_layout.setSpacing(10); left_layout.setContentsMargins(0, 0, 0, 0)
-        self.play_pause_button = QPushButton("Play"); 
-        self.play_pause_button.setToolTip("Play/Pause the video (Spacebar)"); 
-        self.play_pause_button.setEnabled(False) 
-        self.speed_label = QLabel("1.0x"); 
-        self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }"); 
+        self.play_pause_button = QPushButton("Play")
+        self.play_pause_button.setToolTip("Play/Pause the video (Spacebar)")
+        self.play_pause_button.setEnabled(False)
+        
+        self.speed_label = QLabel("1.0x")
+        self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }")
         self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        left_layout.addWidget(self.play_pause_button); 
+        
+        self.preview_offset_label = QLabel(f"Skip: {self.PREVIEW_OFFSET}ms")
+        self.preview_offset_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; text-align: center; }")
+        self.preview_offset_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        left_layout.addWidget(self.play_pause_button)
         left_layout.addWidget(self.speed_label)
+        left_layout.addWidget(self.preview_offset_label)
         
         right_controls = QWidget(); right_layout = QHBoxLayout(right_controls); right_layout.setSpacing(10); right_layout.setContentsMargins(0, 0, 0, 0)
         self.open_button = QPushButton("Open Video"); self.open_button.setToolTip("Open a video file for annotation")
-        self.gear_button = QPushButton("⚙"); self.gear_button.setToolTip("Settings"); self.gear_button.setStyleSheet("QPushButton { padding: 8px 12px; background-color: #4a90e2; color: white; border: none; border-radius: 4px; font-size: 16px; min-width: 40px; } QPushButton:hover { background-color: #357abd; } QPushButton:pressed { background-color: #2a5f9e; }")
+        self.gear_button = QPushButton("⚙")
+        self.gear_button.setToolTip("Settings")
+        self.gear_button.setStyleSheet("""
+            QPushButton {
+                padding: 8px 12px;
+                background-color: #4a90e2;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                min-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #357abd;
+            }
+            QPushButton:pressed {
+                background-color: #2a5f9e;
+            }
+            QPushButton::menu-indicator {
+                width: 0px;
+            }
+        """)
         right_layout.addWidget(self.open_button); right_layout.addWidget(self.gear_button)
         controls_layout.addWidget(left_controls); controls_layout.addStretch(); controls_layout.addWidget(right_controls)
         layout.addWidget(controls_container)
@@ -614,11 +643,19 @@ class VideoPlayerApp(QMainWindow):
              self.updatePlayPauseButton(state)
 
     
+    def _calculate_preview_offset(self):
+        """Calculates the preview offset based on current playback speed."""
+        return int(self.BASE_PREVIEW_OFFSET * self.media_player['_playback_rate'])
+
     def qmlPlaybackRateChanged(self, rate):
         if rate != self.media_player['_playback_rate']:
              print(f"--- Playback rate changed (from QML): {rate}")
              self.media_player['_playback_rate'] = rate
              self.updateSpeedLabel(rate)
+             # Update preview offset based on new speed
+             self.PREVIEW_OFFSET = self._calculate_preview_offset()
+             self._sync_preview_qml_position(self.media_player['_position'])
+             self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
 
     
     def qmlMediaStatusChanged(self, status):
@@ -788,11 +825,14 @@ class VideoPlayerApp(QMainWindow):
         self.play_pause_button.setEnabled(media_has_duration and qml_ready)
     
     def adjustPreviewOffset(self, offset):
-        """Adjusts the preview offset for the QML player."""
-        self.PREVIEW_OFFSET = max(0,  self.PREVIEW_OFFSET + offset)
+        """Adjusts the base preview offset for the QML player."""
+        base_offset_change = offset / self.media_player['_playback_rate']  # Compensate for speed scaling
+        self.BASE_PREVIEW_OFFSET = max(0, self.BASE_PREVIEW_OFFSET + base_offset_change)
+        self.PREVIEW_OFFSET = self._calculate_preview_offset()
         if self.qml_root_preview:
             self._sync_preview_qml_position(self.media_player['_position'])
-            print(f"--- Adjusted preview offset to: {self.PREVIEW_OFFSET} ms")
+            print(f"--- Adjusted base preview offset to: {self.BASE_PREVIEW_OFFSET} ms (effective: {self.PREVIEW_OFFSET} ms)")
+            self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
         else:
             print("--- adjustPreviewOffset: QML preview root missing.")
 
@@ -803,15 +843,15 @@ class VideoPlayerApp(QMainWindow):
 
     def setPlaybackRate(self, rate):
         """Sets the playback rate on the QML player."""
-        if self.qml_root_main:
-             
+        if self.qml_root_main:            
              clamped_rate = max(0.1, min(rate, 16.0)) 
              if clamped_rate != self.media_player['_playback_rate']:
                  print(f"--- Setting playback rate via Python: {clamped_rate}")
                  self.qml_root_main.setProperty('playbackRate', clamped_rate)
-                 
                  self.updateSpeedLabel(clamped_rate)
-                 
+                 # Update preview offset based on new speed
+                 self.PREVIEW_OFFSET = self._calculate_preview_offset()
+                 self._sync_preview_qml_position(self.media_player['_position'])
         if self.qml_root_preview:
             
             self.qml_root_preview.setProperty('playbackRate', clamped_rate)
@@ -1094,7 +1134,11 @@ class VideoPlayerApp(QMainWindow):
     
     def toggleAnnotation(self): self.annotation_manager.toggleAnnotation()
     
-    def editAnnotation(self): self.annotation_manager.editAnnotation()
+    def editAnnotation(self): 
+        # Pause the video if it's playing else continue
+        if self.media_player and self.media_player['_playback_state'] == 1:
+            self.play_pause_button.click()
+        self.annotation_manager.editAnnotation()
     
     def cancelAnnotation(self): self.annotation_manager.cancelAnnotation()
     
