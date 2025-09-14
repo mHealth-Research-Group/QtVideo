@@ -11,7 +11,11 @@ class TimelineWidget(QWidget):
         self.is_main_timeline = is_main_timeline
         self.setMinimumHeight(60)
         self.dragging = None
+        
         self.hover_edge = None
+        self.hover_annotation = None
+        self.hover_pos = None
+        
         self.setCursor(Qt.CursorShape.ArrowCursor)
         self.setMouseTracking(True)
 
@@ -22,7 +26,6 @@ class TimelineWidget(QWidget):
         duration = self.app.media_player['_duration'] / 1000 or 1
         x = event.position().x()
 
-        # Reset dragging state at the beginning of a press
         self.dragging = None
 
         if self.is_main_timeline:
@@ -31,46 +34,30 @@ class TimelineWidget(QWidget):
 
             if abs(x - zoom_start_x) < 5:
                 self.dragging = 'zoom_start'
-                self.update() # Update to show dragging state immediately
+                self.update()
                 return
             elif abs(x - zoom_end_x) < 5:
                 self.dragging = 'zoom_end'
-                self.update() # Update to show dragging state immediately
+                self.update()
                 return
 
-        # Iterate in reverse so we click the 'top' annotation if they overlap
         for annotation in reversed(self.app.annotations):
-            if self.is_main_timeline:
-                start_x = (annotation.start_time / duration) * self.width()
-                end_x = (annotation.end_time / duration) * self.width()
-            else:
-                visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
-                visible_start = self.app.zoom_start * duration
+            start_x, end_x = self._get_annotation_screen_coords(annotation, duration)
 
-                if visible_duration <= 0:
-                    continue
-                
-                relative_start = (annotation.start_time - visible_start) / visible_duration
-                relative_end = (annotation.end_time - visible_start) / visible_duration
+            if end_x < 0 or start_x > self.width():
+                continue
 
-                start_x = relative_start * self.width()
-                end_x = relative_end * self.width()
-
-                if end_x < 0 or start_x > self.width():
-                    continue
-
-                start_x = max(0, min(start_x, self.width()))
-                end_x = max(0, min(end_x, self.width()))
+            start_x = max(0, min(start_x, self.width()))
+            end_x = max(0, min(end_x, self.width()))
             
-            # Important: Check the end edge FIRST when iterating reversed
             if abs(x - end_x) < 5:
                 self.dragging = ('end', annotation)
-                self.update() # Update to show dragging state immediately
-                return # Use return to stop after finding one
+                self.update()
+                return
             elif abs(x - start_x) < 5:
                 self.dragging = ('start', annotation)
-                self.update() # Update to show dragging state immediately
-                return # Use return to stop after finding one
+                self.update()
+                return
 
     def mouseReleaseEvent(self, event):
         self.dragging = None
@@ -132,45 +119,55 @@ class TimelineWidget(QWidget):
 
                 self.app.timeline_widget.update()
                 self.app.second_timeline_widget.update()
-
         else:
-            old_hover = self.hover_edge
-            self.hover_edge = None
+            old_hover_edge = self.hover_edge
+            old_hover_annotation = self.hover_annotation
             
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            found_edge = None
+            found_body = None
+            
+            modifiers = event.modifiers()
+            is_modifier_pressed = bool(modifiers & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier))
 
-            for annotation in self.app.annotations:
-                if self.is_main_timeline:
-                    start_x = (annotation.start_time / duration) * self.width()
-                    end_x = (annotation.end_time / duration) * self.width()
-                else:
-                    visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
-                    visible_start = self.app.zoom_start * duration
-                    if visible_duration <= 0:
-                        continue
-                    
-                    relative_start = (annotation.start_time - visible_start) / visible_duration
-                    relative_end = (annotation.end_time - visible_start) / visible_duration
-                    start_x = relative_start * self.width()
-                    end_x = relative_end * self.width()
+            for annotation in reversed(self.app.annotations):
+                start_x, end_x = self._get_annotation_screen_coords(annotation, duration)
+                
+                if end_x < 0 or start_x > self.width():
+                    continue
 
-                    if end_x < 0 or start_x > self.width():
-                        continue
-
-                    start_x = max(0, min(start_x, self.width()))
-                    end_x = max(0, min(end_x, self.width()))
-
+                # Check for edge hover first, as it has priority
                 if abs(x - start_x) < 5:
-                    self.hover_edge = ('start', annotation)
-                    self.setCursor(Qt.CursorShape.SizeHorCursor)
+                    found_edge = ('start', annotation)
+                    break 
+                if abs(x - end_x) < 5:
+                    found_edge = ('end', annotation)
                     break
-                elif abs(x - end_x) < 5:
-                    self.hover_edge = ('end', annotation)
-                    self.setCursor(Qt.CursorShape.SizeHorCursor)
-                    break
+                
+                # --- FIX: Check for body hover using only the horizontal position ---
+                if is_modifier_pressed and not found_body:
+                    if start_x <= x <= end_x:
+                        found_body = annotation
+            
+            self.hover_edge = found_edge
+            self.hover_annotation = found_body if not self.hover_edge and is_modifier_pressed else None
+            
+            if self.hover_edge:
+                self.setCursor(Qt.CursorShape.SizeHorCursor)
+            else:
+                self.setCursor(Qt.CursorShape.ArrowCursor)
 
-            if old_hover != self.hover_edge:
+            if self.hover_annotation:
+                self.hover_pos = event.position()
+
+            if old_hover_edge != self.hover_edge or old_hover_annotation != self.hover_annotation:
                 self.update()
+
+    def leaveEvent(self, event):
+        if self.hover_edge or self.hover_annotation:
+            self.hover_edge = None
+            self.hover_annotation = None
+            self.update()
+        super().leaveEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -236,14 +233,12 @@ class TimelineWidget(QWidget):
                 overlay_color = QColor(0, 0, 0, 80)
                 painter.fillRect(QRectF(0, 0, zoom_start_x, self.height()), overlay_color)
                 painter.fillRect(QRectF(zoom_end_x, 0, self.width() - zoom_end_x, self.height()), overlay_color)
-        
-        def draw_annotation_block(start_x, end_x, annotation=None, is_current=False, is_dragging=False, is_edge_hover=False):
+
+        def draw_annotation_block(start_x, end_x, annotation=None, is_dragging=False, is_edge_hover=False):
             width = max(5, end_x - start_x)
             if end_x - start_x < 5:
                 center = (start_x + end_x) / 2
-                start_x = center - 2.5  # Half of min width
-                end_x = center + 2.5
-            
+                start_x, end_x = center - 2.5, center + 2.5
             height = self.height() * 0.4
             y_pos = (self.height() - height) / 2
             
@@ -252,125 +247,154 @@ class TimelineWidget(QWidget):
             if annotation and annotation.comments:
                 try:
                     comment_data = json.loads(annotation.comments[0]["body"])
-                    posture = next((item["selectedValue"] for item in comment_data if item["category"] == "POSTURE"), None)
+                    posture = next((item.get("selectedValue") for item in comment_data if item.get("category") == "POSTURE"), None)
                     if posture:
                         color_str = self.app.annotation_manager.get_posture_color(posture)
                         base_color = QColor(color_str)
                 except Exception as e:
-                    print(f"Error getting annotation color: {str(e)}")
+                    print(f"Error getting annotation color: {e}")
             
-            if is_dragging:
-                color = QColor(base_color.red(), base_color.green(), base_color.blue(), 180)
-            elif is_current:
-                color = QColor(base_color.red(), base_color.green(), base_color.blue(), 160)
-            else:
-                color = QColor(base_color.red(), base_color.green(), base_color.blue(), 140)
+            alpha = 180 if is_dragging else (160 if is_edge_hover else 140)
+            color = QColor(base_color.red(), base_color.green(), base_color.blue(), alpha)
             
-            # Draw block
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(color)
             painter.drawRoundedRect(QRectF(start_x, y_pos, width, height), 4, 4)
             
             if is_dragging or is_edge_hover:
-                edge_color = QColor(255, 255, 255, 200)
-                painter.setPen(QPen(edge_color, 2))
+                painter.setPen(QPen(QColor(255, 255, 255, 200), 2))
                 marker_height = 8
-                
-                # Draw start edge markers
-                if (is_dragging and self.dragging[0] == 'start') or \
-                   (is_edge_hover and self.hover_edge[0] == 'start'):
+                edge_type = self.dragging[0] if is_dragging else self.hover_edge[0]
+                if edge_type == 'start':
                     painter.drawLine(QPointF(start_x, y_pos - marker_height), QPointF(start_x, y_pos))
                     painter.drawLine(QPointF(start_x, y_pos + height), QPointF(start_x, y_pos + height + marker_height))
-                
-                # Draw end edge markers
-                if (is_dragging and self.dragging[0] == 'end') or \
-                   (is_edge_hover and self.hover_edge[0] == 'end'):
+                if edge_type == 'end':
                     painter.drawLine(QPointF(end_x, y_pos - marker_height), QPointF(end_x, y_pos))
                     painter.drawLine(QPointF(end_x, y_pos + height), QPointF(end_x, y_pos + height + marker_height))
-        
-        # Draw current annotation start line
+
         if hasattr(self.app, 'current_annotation') and self.app.current_annotation:
-            if self.is_main_timeline:
-                start_x = (self.app.current_annotation.start_time / duration) * self.width()
-            else:
-                visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
-                visible_start = self.app.zoom_start * duration
-                if visible_duration > 0:
-                    relative_start = (self.app.current_annotation.start_time - visible_start) / visible_duration
-                    start_x = relative_start * self.width()
-                    
-                    if 0 <= start_x <= self.width():
-                        painter.setPen(QPen(QColor(0, 255, 0), 2))  # 2px wide green line
-                        painter.drawLine(QPointF(start_x, 0), QPointF(start_x, self.height()))
-            
-            if self.is_main_timeline:
+            start_x, _ = self._get_annotation_screen_coords(self.app.current_annotation, duration)
+            if 0 <= start_x <= self.width():
                 painter.setPen(QPen(QColor(0, 255, 0), 2))
                 painter.drawLine(QPointF(start_x, 0), QPointF(start_x, self.height()))
 
         if hasattr(self.app, 'annotations'):
             for annotation in self.app.annotations:
-                if self.is_main_timeline:
-                    start_x = (annotation.start_time / duration) * self.width()
-                    end_x = (annotation.end_time / duration) * self.width()
-                else:
-                    # Adjust annotation positions for zoomed view
-                    visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
-                    if visible_duration <= 0: continue
-                    visible_start = self.app.zoom_start * duration
-                  
-                    relative_start = (annotation.start_time - visible_start) / visible_duration
-                    relative_end = (annotation.end_time - visible_start) / visible_duration
-                    
-                    start_x = relative_start * self.width()
-                    end_x = relative_end * self.width()
+                start_x, end_x = self._get_annotation_screen_coords(annotation, duration)
                 
+                if end_x < 0 or start_x > self.width():
+                    continue
+                
+                start_x = max(0, start_x)
+                end_x = min(end_x, self.width())
                 width = end_x - start_x
                 
-                if not self.is_main_timeline and (end_x < 0 or start_x > self.width()):
-                    continue
-                  
-                if not self.is_main_timeline:
-                    start_x = max(0, min(start_x, self.width()))
-                    end_x = max(0, min(end_x, self.width()))
-                    width = end_x - start_x
-                
-                if width > 0:  
+                if width > 0:
                     is_dragging = self.dragging and isinstance(self.dragging, tuple) and self.dragging[1] == annotation
-                    is_edge_hover = (
-                        not self.dragging and 
-                        self.hover_edge and 
-                        self.hover_edge[1] == annotation
-                    )
-
-                    draw_annotation_block(
-                        start_x, 
-                        end_x, 
-                        annotation=annotation,
-                        is_current=False,
-                        is_dragging=is_dragging,
-                        is_edge_hover=is_edge_hover
-                    )
+                    is_edge_hover = not self.dragging and self.hover_edge and self.hover_edge[1] == annotation
+                    draw_annotation_block(start_x, end_x, annotation=annotation, is_dragging=is_dragging, is_edge_hover=is_edge_hover)
                 
-
                 if width > 50:
                     painter.setPen(QPen(QColor(255, 255, 255)))
                     try:
                         comment_data = json.loads(annotation.comments[0]["body"])
-                        posture = next((item["selectedValue"] for item in comment_data if item["category"] == "POSTURE"), "")
-                        hlb = next((item["selectedValue"] for item in comment_data if item["category"] == "HIGH LEVEL BEHAVIOR"), [])
+                        posture = next((item.get("selectedValue") for item in comment_data if item.get("category") == "POSTURE"), "")
+                        hlb_list = next((item.get("selectedValue") for item in comment_data if item.get("category") == "HIGH LEVEL BEHAVIOR"), [])
+                        hlb = hlb_list if isinstance(hlb_list, list) else []
+
+                        text = ", ".join(hlb[:2]) + ("..." if len(hlb) > 2 else "")
+                        full_text = f"{posture} - {text}" if posture and text else posture or text
                         
-                        if isinstance(hlb, list):
-                            text = ", ".join(hlb[:2])
-                            if len(hlb) > 2:
-                                text += "..."
-                        else:
-                            text = str(hlb)
-                        
-                        # Draw combined text
-                        text = f"{posture} - {text}"
                         block_height = self.height() * 0.4
                         block_y_pos = (self.height() - block_height) / 2
                         text_rect = QRectF(start_x + 4, block_y_pos, width - 8, block_height)
-                        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, text)
+                        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, full_text)
                     except Exception as e:
-                        print(f"Error displaying annotation text: {str(e)}")
+                        print(f"Error displaying annotation text: {e}")
+
+        if self.hover_annotation and self.hover_pos:
+            self._draw_hover_tooltip(painter, self.hover_pos, self.hover_annotation)
+
+    def _get_annotation_screen_coords(self, annotation, duration):
+        if self.is_main_timeline:
+            start_x = (annotation.start_time / duration) * self.width()
+            end_x = (annotation.end_time / duration) * self.width()
+        else:
+            visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+            visible_start = self.app.zoom_start * duration
+            if visible_duration <= 0: return -1, -1
+            start_x = ((annotation.start_time - visible_start) / visible_duration) * self.width()
+            end_x = ((annotation.end_time - visible_start) / visible_duration) * self.width()
+        return start_x, end_x
+
+    def _format_annotation_for_tooltip(self, annotation):
+        """Format annotation data into a readable single line for the tooltip."""
+        if not annotation or not annotation.comments:
+            return ""
+        
+        try:
+            comment_list = json.loads(annotation.comments[0]['body'])
+            
+            def find_value(category_name):
+                return next((item.get("selectedValue") for item in comment_list if item.get("category") == category_name), None)
+
+            tooltip_items = [
+                ("Posture", find_value("POSTURE")),
+                ("Behavior", find_value("HIGH LEVEL BEHAVIOR")),
+                ("PA Type", find_value("PHYSICAL ACTIVITY TYPE")),
+                ("Params", find_value("BEHAVIORAL PARAMETERS")),
+                ("Situation", find_value("EXPERIMENTAL SITUATION")),
+                ("Notes", find_value("SPECIAL NOTES")),
+            ]
+            
+            parts = []
+            for label, value in tooltip_items:
+                if not value:
+                    continue
+                
+                if isinstance(value, list):
+                    formatted_value = ", ".join(value)
+                else:
+                    formatted_value = str(value)
+                
+                parts.append(f"{label}: {formatted_value}")
+            
+            if not parts:
+                return "No Labels Set"
+            
+            return " | ".join(parts)
+            
+        except (json.JSONDecodeError, IndexError, KeyError, TypeError) as e:
+            print(f"Error formatting tooltip: {e}")
+            return "Invalid Annotation Data"
+
+    def _draw_hover_tooltip(self, painter, position, annotation):
+        text = self._format_annotation_for_tooltip(annotation)
+        if not text: return
+
+        padding = 8
+        font = painter.font()
+        font.setPointSize(9)
+        painter.setFont(font)
+        
+        text_rect = painter.fontMetrics().boundingRect(text) # Simplified calculation
+        tooltip_rect = text_rect.adjusted(-padding, -padding, padding, padding)
+        
+        x = position.x() + 15
+        y = position.y() - tooltip_rect.height() - 15
+
+        if x + tooltip_rect.width() > self.width():
+            x = self.width() - tooltip_rect.width() - 5
+        if x < 5:
+            x = 5
+        if y < 5:
+            y = position.y() + 15
+
+        tooltip_rect.moveTo(int(x), int(y))
+
+        painter.setBrush(QColor(0, 0, 0, 200))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(tooltip_rect, 5, 5)
+        
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(tooltip_rect, Qt.AlignmentFlag.AlignCenter, text)
