@@ -8,10 +8,10 @@ import sys
 
 # PyQt6 imports
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QSlider, QPushButton, QFileDialog, QLabel, QMessageBox,
-                             QMenu, QApplication)
-from PyQt6.QtCore import Qt, QUrl, QTime, QTimer, QObject
-from PyQt6.QtGui import QKeyEvent, QPainter, QAction, QPalette 
+                             QPushButton, QFileDialog, QLabel, QMessageBox,
+                             QMenu, QApplication, QStyle, QStyleOptionSlider)
+from PyQt6.QtCore import Qt, QUrl, QTime, QTimer, QObject, pyqtSignal, QPoint, QRect
+from PyQt6.QtGui import QKeyEvent, QPainter, QAction, QPalette, QColor, QBrush, QPen
 from PyQt6.QtQuickWidgets import QQuickWidget
 
 
@@ -21,10 +21,7 @@ from src.dialogs import AnnotationDialog
 from src.shortcuts import ShortcutManager
 from src.annotation_manager import AnnotationManager
 from src.utils import AutosaveManager
-
 class VideoPlayerApp(QMainWindow):
-    
-    
     SYNC_THRESHOLD = 150
     MIN_ZOOM_DURATION = 600000 # 10 minutes in ms
     BASE_PREVIEW_OFFSET = 2000  # 2 seconds in ms
@@ -168,40 +165,17 @@ class VideoPlayerApp(QMainWindow):
         
         main_timeline_container = QWidget(); 
         main_timeline_container.setMinimumHeight(50)
-        self.timeline = QSlider(Qt.Orientation.Horizontal)
+
+        self.timeline = CustomSlider(Qt.Orientation.Horizontal, show_handle=True)
         self.timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=True))
         self.timeline.sliderPressed.connect(self.sliderPressed)
         self.timeline.sliderReleased.connect(self.sliderReleased)
-        self.timeline.mousePressEvent = lambda e: self.timelineMousePress(e, self.timeline)
         self.timeline.setEnabled(False) 
         self.timeline_widget = TimelineWidget(self, show_position=False, is_main_timeline=True)
         main_timeline_layout = QVBoxLayout(main_timeline_container); 
-        main_timeline_layout.setSpacing(2); 
+        main_timeline_layout.setSpacing(20); 
         main_timeline_layout.setContentsMargins(0, 0, 0, 0)
         main_timeline_layout.addWidget(self.timeline_widget)
-        self.timeline.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 4px;
-                background: #404040;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                background: #4a90e2;
-                width: 16px;
-                height: 16px;
-                margin: -6px 0;
-                border-radius: 8px;
-                border: 2px solid #2b2b2b;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #5aa0f2;
-            }
-            QSlider::sub-page:horizontal {
-                background: #4a90e2;
-                border-radius: 2px;
-            }
-        """)
-        
         main_timeline_layout.addWidget(self.timeline)
         timelines_layout.addWidget(main_timeline_container)
         
@@ -224,30 +198,13 @@ class VideoPlayerApp(QMainWindow):
         second_timeline_layout.setSpacing(2); 
         second_timeline_layout.setContentsMargins(0, 0, 0, 0)
         
-        
-        self.second_timeline = QSlider(Qt.Orientation.Horizontal)
+        # --- REPLACEMENT: Use CustomSlider instead of QSlider ---
+        self.second_timeline = CustomSlider(Qt.Orientation.Horizontal, show_handle=False)
         self.second_timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=False))
         self.second_timeline.sliderPressed.connect(self.sliderPressed)
         self.second_timeline.sliderReleased.connect(self.sliderReleased)
-        self.second_timeline.mousePressEvent = lambda e: self.timelineMousePress(e, self.second_timeline)
         self.second_timeline.setEnabled(False) 
         
-        self.second_timeline.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 4px;
-                background: #404040;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                width: 0px;
-                height: 0px;
-                margin: 0px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #4a90e2;
-                border-radius: 2px;
-            }
-        """)
         self.second_timeline_widget = TimelineWidget(self, show_position=True, is_main_timeline=False)
         second_timeline_layout.addWidget(self.second_timeline_widget)
         second_timeline_layout.addWidget(self.second_timeline)
@@ -1101,34 +1058,8 @@ class VideoPlayerApp(QMainWindow):
     
     def sliderReleased(self):
         
-        
-        slider = self.sender()
-        if slider == self.timeline or slider == self.second_timeline:
-            
-            if self.qml_root_main and self.qml_root_main.property('isSeekable'):
-                self.seekFromSlider(slider.value()) 
         pass
 
-    
-    def timelineMousePress(self, event, slider):
-        """Custom mouse press handler for timeline sliders"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position().x()
-            width = slider.width()
-            relative_pos = max(0, min(1, pos / width))
-            
-            # Convert to value in slider range
-            value_range = slider.maximum() - slider.minimum()
-            value = int(slider.minimum() + (relative_pos * value_range))
-            
-            # Update slider and seek
-            slider.setValue(value)
-            if slider == self.timeline:
-                self.setPosition(value, from_main=True)
-            else:
-                self.setPosition(value, from_main=False)
-            
-        QSlider.mousePressEvent(slider, event)
     
     
     
