@@ -576,8 +576,7 @@ class VideoPlayerApp(QMainWindow):
             self.second_timeline.setEnabled(has_duration)
 
             if has_duration:
-                if not self.timeline.maximum(): 
-                    self._setup_timeline_zoom()
+                self._setup_timeline_zoom()
                 
                 current_time = QTime(0, 0).addMSecs(self.media_player['_position']).toString('hh:mm:ss')
                 total_time = QTime(0, 0).addMSecs(self.media_player['_duration']).toString('hh:mm:ss')
