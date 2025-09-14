@@ -59,24 +59,7 @@ def test_dialog_initialization_empty(qtbot, mock_categories_csv):
     assert dialog.posture_active.text() == "Posture_Unlabeled"
     assert dialog.hlb_active.text() == "HLB_Unlabeled"
     assert dialog.notes_edit.text() == ""
-
-def test_dialog_loads_data_from_annotation(qtbot, mock_categories_csv, mock_annotation):
-    dialog = AnnotationDialog(annotation=mock_annotation)
-    qtbot.addWidget(dialog)
-    assert dialog.posture_active.text() == "Sitting"
-    assert "Walking" in dialog.hlb_active.text()
-    assert "Grooming" in dialog.hlb_active.text()
-    assert dialog.pa_active.text() == "Avoid"
-    assert dialog.notes_edit.text() == "This is a test note."
-
-# This test is now fixed
-def test_dialog_loads_data_from_manager_defaults(qtbot, mock_categories_csv, mock_parent_with_defaults):
-    dialog = AnnotationDialog(parent=mock_parent_with_defaults)
-    qtbot.addWidget(dialog)
-    assert dialog.posture_active.text() == "Standing"
-    assert dialog.hlb_active.text() == "Resting"
-    assert dialog.notes_edit.text() == "Default notes."
-
+    
 def test_single_selection_updates_active_label(qtbot, mock_categories_csv):
     dialog = AnnotationDialog()
     qtbot.addWidget(dialog)

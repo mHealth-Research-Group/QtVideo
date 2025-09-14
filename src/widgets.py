@@ -10,155 +10,156 @@ class TimelineWidget(QWidget):
         self.show_position = show_position
         self.is_main_timeline = is_main_timeline
         self.setMinimumHeight(60)
-        self.dragging = None 
+        self.dragging = None
         self.hover_edge = None
         self.setCursor(Qt.CursorShape.ArrowCursor)
-        self.setMouseTracking(True) 
-        
-    
-        
+        self.setMouseTracking(True)
+
     def mousePressEvent(self, event):
         if not hasattr(self.app, 'media_player'):
             return
-            
+
         duration = self.app.media_player['_duration'] / 1000 or 1
         x = event.position().x()
-        width_percent = x / self.width()
+
+        # Reset dragging state at the beginning of a press
+        self.dragging = None
 
         if self.is_main_timeline:
             zoom_start_x = self.app.zoom_start * self.width()
             zoom_end_x = self.app.zoom_end * self.width()
-            
+
             if abs(x - zoom_start_x) < 5:
                 self.dragging = 'zoom_start'
+                self.update() # Update to show dragging state immediately
                 return
             elif abs(x - zoom_end_x) < 5:
                 self.dragging = 'zoom_end'
+                self.update() # Update to show dragging state immediately
                 return
-        
-        # Check if clicking near annotation edges
-        for annotation in self.app.annotations:
+
+        # Iterate in reverse so we click the 'top' annotation if they overlap
+        for annotation in reversed(self.app.annotations):
             if self.is_main_timeline:
                 start_x = (annotation.start_time / duration) * self.width()
                 end_x = (annotation.end_time / duration) * self.width()
             else:
-                # Adjust coordinates w
                 visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
                 visible_start = self.app.zoom_start * duration
-                
-                if visible_duration > 0:
-                    # Convert annotation times to relative positions in zoomed view
-                    relative_start = (annotation.start_time - visible_start) / visible_duration
-                    relative_end = (annotation.end_time - visible_start) / visible_duration
 
-                    start_x = relative_start * self.width()
-                    end_x = relative_end * self.width()
+                if visible_duration <= 0:
+                    continue
                 
-                    if end_x < 0 or start_x > self.width():
-                        continue
-                    
-                    start_x = max(0, min(start_x, self.width()))
-                    end_x = max(0, min(end_x, self.width()))
+                relative_start = (annotation.start_time - visible_start) / visible_duration
+                relative_end = (annotation.end_time - visible_start) / visible_duration
 
-            if abs(x - start_x) < 5:
-                self.dragging = ('start', annotation)
-                break
-            elif abs(x - end_x) < 5:
+                start_x = relative_start * self.width()
+                end_x = relative_end * self.width()
+
+                if end_x < 0 or start_x > self.width():
+                    continue
+
+                start_x = max(0, min(start_x, self.width()))
+                end_x = max(0, min(end_x, self.width()))
+            
+            # Important: Check the end edge FIRST when iterating reversed
+            if abs(x - end_x) < 5:
                 self.dragging = ('end', annotation)
-                break
-        
+                self.update() # Update to show dragging state immediately
+                return # Use return to stop after finding one
+            elif abs(x - start_x) < 5:
+                self.dragging = ('start', annotation)
+                self.update() # Update to show dragging state immediately
+                return # Use return to stop after finding one
+
     def mouseReleaseEvent(self, event):
         self.dragging = None
+        self.setCursor(Qt.CursorShape.ArrowCursor)
         self.update()
-        
+
     def mouseMoveEvent(self, event):
         if not hasattr(self.app, 'media_player'):
             return
-            
+
         duration = self.app.media_player['_duration'] / 1000 or 1
         x = event.position().x()
-        
-        if not self.dragging:
-            return
 
-        if self.dragging in ['zoom_start', 'zoom_end']:
-            width_percent = max(0.0, min(1.0, x / self.width()))
-            
-            if self.dragging == 'zoom_start':
-                if width_percent < self.app.zoom_end - 0.05:
-                    self.app.zoom_start = width_percent
-                    self.app.timeline_widget.update()
-                    self.app.second_timeline_widget.update()
-            else:  # zoom_end
-                if width_percent > self.app.zoom_start + 0.05: 
-                    self.app.zoom_end = width_percent
-                    self.app.timeline_widget.update()
-                    self.app.second_timeline_widget.update()
-            return
-            
-        # Handle annotation dragging
-        if isinstance(self.dragging, tuple):
-            edge, annotation = self.dragging
-            if self.is_main_timeline:
-                new_time = (x / self.width()) * duration
-            else:
-                visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
-                visible_start = self.app.zoom_start * duration
-                new_time = visible_start + (x / self.width()) * visible_duration
-        
-            sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
-            current_index = sorted_annotations.index(annotation)
-            
-            if edge == 'start':
-                if annotation.end_time - new_time < 0.1:
-                    return
+        if self.dragging:
+            if self.dragging in ['zoom_start', 'zoom_end']:
+                width_percent = max(0.0, min(1.0, x / self.width()))
+                if self.dragging == 'zoom_start':
+                    if width_percent < self.app.zoom_end - 0.05:
+                        self.app.zoom_start = width_percent
+                else:  # zoom_end
+                    if width_percent > self.app.zoom_start + 0.05:
+                        self.app.zoom_end = width_percent
 
-                if current_index > 0:
-                    prev_annotation = sorted_annotations[current_index - 1]
-                    if new_time < prev_annotation.end_time + 0.1:
-                        new_time = prev_annotation.end_time + 0.1
-                        
-                annotation.start_time = max(0, new_time)
-            else: 
-                if new_time - annotation.start_time < 0.1:
-                    return
-                    
-                if current_index < len(sorted_annotations) - 1:
-                    next_annotation = sorted_annotations[current_index + 1]
-                    if new_time > next_annotation.start_time - 0.1:
-                        new_time = next_annotation.start_time - 0.1
-                        
-                annotation.end_time = min(duration, new_time)
-            
-            self.app.timeline_widget.update()
-            self.app.second_timeline_widget.update()
+                self.app.timeline_widget.update()
+                self.app.second_timeline_widget.update()
+                return
+
+            elif isinstance(self.dragging, tuple):
+                edge, annotation = self.dragging
+                if self.is_main_timeline:
+                    new_time = (x / self.width()) * duration
+                else:
+                    visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                    visible_start = self.app.zoom_start * duration
+                    new_time = visible_start + (x / self.width()) * visible_duration
+
+                sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
+                current_index = None
+                for idx, ann in enumerate(sorted_annotations):
+                    if ann is annotation:
+                        current_index = idx
+                        break
+                if edge == 'start':
+                    if annotation.end_time - new_time < 0.1: # Min duration
+                        return
+                    if current_index > 0:
+                        prev_annotation = sorted_annotations[current_index - 1]
+                        if new_time < prev_annotation.end_time + 0.1:
+                            new_time = prev_annotation.end_time + 0.1
+                    annotation.start_time = max(0, new_time)
+                else:  # 'end'
+                    if new_time - annotation.start_time < 0.1: # Min duration
+                        return
+                    if current_index < len(sorted_annotations) - 1:
+                        next_annotation = sorted_annotations[current_index + 1]
+                        if new_time > next_annotation.start_time - 0.1:
+                            new_time = next_annotation.start_time - 0.1
+                    annotation.end_time = min(duration, new_time)
+
+                self.app.timeline_widget.update()
+                self.app.second_timeline_widget.update()
+
         else:
             old_hover = self.hover_edge
             self.hover_edge = None
             
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+
             for annotation in self.app.annotations:
                 if self.is_main_timeline:
                     start_x = (annotation.start_time / duration) * self.width()
                     end_x = (annotation.end_time / duration) * self.width()
                 else:
-                    # Adjust coordinates for zoomed view
                     visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
                     visible_start = self.app.zoom_start * duration
+                    if visible_duration <= 0:
+                        continue
                     
-                    if visible_duration > 0:
-                        relative_start = (annotation.start_time - visible_start) / visible_duration
-                        relative_end = (annotation.end_time - visible_start) / visible_duration
-                        
-                        start_x = relative_start * self.width()
-                        end_x = relative_end * self.width()
-                        
+                    relative_start = (annotation.start_time - visible_start) / visible_duration
+                    relative_end = (annotation.end_time - visible_start) / visible_duration
+                    start_x = relative_start * self.width()
+                    end_x = relative_end * self.width()
 
-                        if end_x < 0 or start_x > self.width():
-                            continue
+                    if end_x < 0 or start_x > self.width():
+                        continue
 
-                        start_x = max(0, min(start_x, self.width()))
-                        end_x = max(0, min(end_x, self.width()))
-                
+                    start_x = max(0, min(start_x, self.width()))
+                    end_x = max(0, min(end_x, self.width()))
+
                 if abs(x - start_x) < 5:
                     self.hover_edge = ('start', annotation)
                     self.setCursor(Qt.CursorShape.SizeHorCursor)
@@ -167,13 +168,10 @@ class TimelineWidget(QWidget):
                     self.hover_edge = ('end', annotation)
                     self.setCursor(Qt.CursorShape.SizeHorCursor)
                     break
-            
-            if not self.hover_edge:
-                self.setCursor(Qt.CursorShape.ArrowCursor)
-            
+
             if old_hover != self.hover_edge:
                 self.update()
-        
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -185,6 +183,7 @@ class TimelineWidget(QWidget):
 
         if not self.is_main_timeline:
             visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+            if visible_duration <= 0: visible_duration = 1
             visible_start = self.app.zoom_start * duration
         
         painter.setPen(Qt.PenStyle.NoPen)
@@ -260,7 +259,6 @@ class TimelineWidget(QWidget):
                 except Exception as e:
                     print(f"Error getting annotation color: {str(e)}")
             
-            # Draw annotation block with different colors based on state
             if is_dragging:
                 color = QColor(base_color.red(), base_color.green(), base_color.blue(), 180)
             elif is_current:
@@ -273,7 +271,6 @@ class TimelineWidget(QWidget):
             painter.setBrush(color)
             painter.drawRoundedRect(QRectF(start_x, y_pos, width, height), 4, 4)
             
-            # Draw edge indicators when hovering or dragging
             if is_dragging or is_edge_hover:
                 edge_color = QColor(255, 255, 255, 200)
                 painter.setPen(QPen(edge_color, 2))
@@ -318,6 +315,7 @@ class TimelineWidget(QWidget):
                 else:
                     # Adjust annotation positions for zoomed view
                     visible_duration = (self.app.zoom_end - self.app.zoom_start) * duration
+                    if visible_duration <= 0: continue
                     visible_start = self.app.zoom_start * duration
                   
                     relative_start = (annotation.start_time - visible_start) / visible_duration
@@ -337,7 +335,7 @@ class TimelineWidget(QWidget):
                     width = end_x - start_x
                 
                 if width > 0:  
-                    is_dragging = self.dragging and self.dragging[1] == annotation
+                    is_dragging = self.dragging and isinstance(self.dragging, tuple) and self.dragging[1] == annotation
                     is_edge_hover = (
                         not self.dragging and 
                         self.hover_edge and 

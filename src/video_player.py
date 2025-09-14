@@ -9,12 +9,11 @@ import sys
 # PyQt6 imports
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QFileDialog, QLabel, QMessageBox,
-                             QMenu, QApplication, QStyle, QStyleOptionSlider)
-from PyQt6.QtCore import Qt, QUrl, QTime, QTimer, QObject, pyqtSignal, QPoint, QRect
-from PyQt6.QtGui import QKeyEvent, QPainter, QAction, QPalette, QColor, QBrush, QPen
+                             QMenu)
+from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
+from PyQt6.QtGui import QAction, QPalette
 from PyQt6.QtQuickWidgets import QQuickWidget
-
-
+from src.slider import CustomSlider
 from src.models import TimelineAnnotation
 from src.widgets import TimelineWidget
 from src.dialogs import AnnotationDialog
@@ -577,7 +576,8 @@ class VideoPlayerApp(QMainWindow):
             self.second_timeline.setEnabled(has_duration)
 
             if has_duration:
-                self._setup_timeline_zoom()
+                if not self.timeline.maximum(): 
+                    self._setup_timeline_zoom()
                 
                 current_time = QTime(0, 0).addMSecs(self.media_player['_position']).toString('hh:mm:ss')
                 total_time = QTime(0, 0).addMSecs(self.media_player['_duration']).toString('hh:mm:ss')
@@ -624,7 +624,8 @@ class VideoPlayerApp(QMainWindow):
         media_has_ended = (status == 6)
 
         if media_is_ready:
-             self._setup_timeline_zoom()
+             if self.media_player['_duration'] == 0:  # Only setup zoom on initial load
+                 self._setup_timeline_zoom()
              print("--- Media loaded/prepared (QML), enabling controls & updating UI state")
              
              self.qmlDurationChanged(self.qml_root_main.property('duration'))
