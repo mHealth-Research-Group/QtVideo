@@ -104,22 +104,14 @@ class AnnotationManager:
         dialog = AnnotationDialog(target_annotation, self.app)
 
         if dialog.exec():
-            posture_items = dialog.posture_list.selectedItems()
-            posture = posture_items[0].text() if posture_items else ""
-            hlb_items = dialog.hlb_list.selectedItems()
-            hlb = [item.text() for item in hlb_items]
-            pa_type_items = dialog.pa_list.selectedItems()
-            pa_type = pa_type_items[0].text() if pa_type_items else ""
-            bp_items = dialog.bp_list.selectedItems()
-            behavioral_params = [item.text() for item in bp_items]
-            es_items = dialog.es_list.selectedItems()
-            exp_situation = es_items[0].text() if es_items else ""
-            special_notes = dialog.notes_edit.text()
-
+            selections = dialog.get_all_selections()
             label_data = {
-                "posture": posture, "hlb": hlb, "pa_type": pa_type,
-                "behavioral_params": behavioral_params, "exp_situation": exp_situation,
-                "special_notes": special_notes
+                "posture": selections["POSTURE"],
+                "hlb": selections["HIGH LEVEL BEHAVIOR"],
+                "pa_type": selections["PA TYPE"],
+                "behavioral_params": selections["Behavioral Parameters"],
+                "exp_situation": selections["Experimental situation"],
+                "special_notes": selections["Special Notes"]
             }
 
             if target_annotation:

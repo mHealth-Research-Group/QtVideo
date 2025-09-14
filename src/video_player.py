@@ -846,16 +846,18 @@ class VideoPlayerApp(QMainWindow):
         self.qml_root_preview.seek(target_position + self.PREVIEW_OFFSET)
         self.media_player['_position'] = target_position
 
-        if from_main:
-            self.timeline.setValue(target_position)
-            if self.media_player['_duration'] > 0:
-                zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
-                zoom_start = self.zoom_start * self.media_player['_duration']
-                if target_position >= zoom_start and target_position <= (zoom_start + zoom_duration):
-                    relative_pos = (target_position - zoom_start) / zoom_duration
-                    self.second_timeline.setValue(int(relative_pos * self.second_timeline.maximum()))
-        else:
-            self.timeline.setValue(target_position)
+        self.timeline.setValue(target_position)
+        
+        if self.media_player['_duration'] > 0:
+            zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
+            zoom_start = self.zoom_start * self.media_player['_duration']
+            if target_position >= zoom_start and target_position <= (zoom_start + zoom_duration):
+                relative_pos = (target_position - zoom_start) / zoom_duration
+                self.second_timeline.setValue(int(relative_pos * self.second_timeline.maximum()))
+            elif target_position < zoom_start:
+                self.second_timeline.setValue(0)
+            else:
+                self.second_timeline.setValue(self.second_timeline.maximum())
 
     def _setup_timeline_zoom(self):
          """Sets timeline zoom state variables based on duration."""
