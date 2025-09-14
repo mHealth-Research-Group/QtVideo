@@ -1,10 +1,11 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                            QPushButton, QWidget, QDialogButtonBox, QComboBox,
-                           QGridLayout, QFrame, QScrollArea, QLayout)
+                           QGridLayout, QFrame, QScrollArea, QLayout, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint, QTimer
 from PyQt6.QtGui import QKeyEvent
 import json
 import csv
+from collections import defaultdict
 
 class FlowLayout(QLayout):
     def __init__(self, parent=None, margin=0, spacing=-1):
@@ -140,7 +141,6 @@ class SelectionWidget(QWidget):
         layout.setSpacing(8)
         
         if multi_select:
-            # Create scroll area for tags only for multi-select
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -171,7 +171,6 @@ class SelectionWidget(QWidget):
             self.tag_layout = FlowLayout(self.tag_container)
             self.tag_container.setLayout(self.tag_layout)
             
-            # Add initial default tag for multi-select
             if combo.count() > 0:
                 default_text = combo.itemText(0)
                 self.selected_values = [default_text]
@@ -184,7 +183,6 @@ class SelectionWidget(QWidget):
             scroll.setMaximumHeight(180)
             layout.addWidget(scroll)
         else:
-            # For single select, just add the combo box and update the active label
             if combo.count() > 0:
                 self.selected_values = [combo.itemText(0)]
                 self.active_label.setText(combo.itemText(0))
@@ -193,12 +191,15 @@ class SelectionWidget(QWidget):
         self.combo.currentTextChanged.connect(self.handle_selection)
         
     def handle_selection(self, text):
-        if text and text != self.combo.itemText(0):
+        if text:
+            changed = False
             if not self.multi_select:
-                self.selected_values = [text]
-                self.update_active_label()
+                if not self.selected_values or text != self.selected_values[0]:
+                    self.selected_values = [text]
+                    self.update_active_label()
+                    changed = True
             else:
-                if text not in self.selected_values:
+                if text != self.combo.itemText(0) and text not in self.selected_values:
                     if len(self.selected_values) == 1 and self.selected_values[0] == self.combo.itemText(0):
                         self.selected_values.clear()
                         item = self.tag_layout.takeAt(0)
@@ -210,11 +211,13 @@ class SelectionWidget(QWidget):
                     tag.removed.connect(self.remove_tag)
                     self.tag_layout.addWidget(tag)
                     self.update_active_label()
+                    changed = True
+
+            if changed:
+                 self.selectionChanged.emit(self.selected_values)
             
             self.last_selected = text
-            self.selectionChanged.emit(self.selected_values)
         
-        # Set the combo box to show the last selected item
         if self.last_selected:
             index = self.combo.findText(self.last_selected)
             if index >= 0:
@@ -243,7 +246,6 @@ class SelectionWidget(QWidget):
         if not self.selected_values:
             self.active_label.setText(self.combo.itemText(0))
         else:
-            # Format with line breaks every 2-3 items
             chunks = []
             current_chunk = []
             
@@ -264,6 +266,10 @@ class AnnotationDialog(QDialog):
         self.setMinimumWidth(1200)
         self.setMinimumHeight(800)
         
+        self.mappings = {}
+        self.full_categories = {}
+        self.load_mappings()
+
         main_scroll = QScrollArea()
         main_scroll.setWidgetResizable(True)
         main_scroll.setStyleSheet("""
@@ -367,13 +373,15 @@ class AnnotationDialog(QDialog):
         main_layout = QVBoxLayout(main_widget)
         main_layout.setSpacing(24)
         main_layout.setContentsMargins(24, 24, 24, 24)
+        
+        self.show_all_checkbox = QCheckBox("Show all options (allows incompatible selections)")
+        main_layout.addWidget(self.show_all_checkbox)
 
         grid = QGridLayout()
         grid.setSpacing(16)
         grid.setColumnMinimumWidth(0, 220)
         grid.setColumnStretch(1, 2)
 
-        # Headers with improved styling
         headers = ["Category", "Choice(s)", "Active labels"]
         for i, header in enumerate(headers):
             label = QLabel(header)
@@ -385,7 +393,6 @@ class AnnotationDialog(QDialog):
             """)
             grid.addWidget(label, 0, i)
 
-        # Initialize comboboxes and labels
         self.posture_combo = QComboBox()
         self.hlb_combo = QComboBox()
         self.pa_combo = QComboBox()
@@ -410,21 +417,17 @@ class AnnotationDialog(QDialog):
         for label in [self.posture_active, self.hlb_active, self.pa_active, self.bp_active, self.es_active]:
             label.setStyleSheet(label_style)
 
-        # Create selection widgets
         self.posture_selection = SelectionWidget(self.posture_combo, self.posture_active, multi_select=False)
         self.hlb_selection = SelectionWidget(self.hlb_combo, self.hlb_active, multi_select=True)
         self.pa_selection = SelectionWidget(self.pa_combo, self.pa_active, multi_select=False)
         self.bp_selection = SelectionWidget(self.bp_combo, self.bp_active, multi_select=True)
         self.es_selection = SelectionWidget(self.es_combo, self.es_active, multi_select=False)
 
-        # Set minimum width for comboboxes
         for combo in [self.posture_combo, self.hlb_combo, self.pa_combo, self.bp_combo, self.es_combo]:
             combo.setMinimumWidth(400)
         
-        # Load categories from CSV
         self.load_categories()
         
-        # Add categories and selection widgets to grid with improved labels
         categories = [
             ("POSTURE (Key 1)", self.posture_selection, self.posture_active),
             ("HIGH LEVEL BEHAVIOR (Key 2)", self.hlb_selection, self.hlb_active),
@@ -450,7 +453,6 @@ class AnnotationDialog(QDialog):
 
         main_layout.addLayout(grid)
         
-        # Special Notes with improved styling
         notes_container = QWidget()
         notes_container.setStyleSheet("""
             QWidget {
@@ -462,27 +464,22 @@ class AnnotationDialog(QDialog):
         notes_layout = QVBoxLayout(notes_container)
         notes_layout.setSpacing(12)
         
-        notes_label = QLabel("Special Notes (Key 6)")
-        notes_label.setProperty("category", "true")
+        notes_label = QLabel("Special Notes (Key 6)"); notes_label.setProperty("category", "true")
         notes_layout.addWidget(notes_label)
         
-        notes_sublabel = QLabel("Maximum 255 characters")
-        notes_sublabel.setStyleSheet("color: #888888; font-size: 12px; padding: 4px 0;")
+        notes_sublabel = QLabel("Maximum 255 characters"); notes_sublabel.setStyleSheet("color: #888888; font-size: 12px; padding: 4px 0;")
         notes_layout.addWidget(notes_sublabel)
         
-        self.notes_edit = QLineEdit()
-        self.notes_edit.setMaxLength(255)
-        self.notes_edit.setPlaceholderText("Enter any special notes here...")
+        self.notes_edit = QLineEdit(); self.notes_edit.setMaxLength(255); self.notes_edit.setPlaceholderText("Enter any special notes here...")
         notes_layout.addWidget(self.notes_edit)
         main_layout.addWidget(notes_container)
-        # Add buttons
+
         button_container = QWidget()
         button_layout = QHBoxLayout(button_container)
         button_layout.setSpacing(10)
         
         button_box = QDialogButtonBox()
-        ok_button = QPushButton("Save")
-        cancel_button = QPushButton("Cancel")
+        ok_button = QPushButton("Save"); cancel_button = QPushButton("Cancel")
         
         button_box.addButton(ok_button, QDialogButtonBox.ButtonRole.AcceptRole)
         button_box.addButton(cancel_button, QDialogButtonBox.ButtonRole.RejectRole)
@@ -493,13 +490,11 @@ class AnnotationDialog(QDialog):
         button_layout.addWidget(button_box)
         main_layout.addWidget(button_container)
         
-        # Set main scroll area and dialog layout
         main_scroll.setWidget(main_widget)
         dialog_layout = QVBoxLayout(self)
         dialog_layout.setContentsMargins(0, 0, 0, 0)
         dialog_layout.addWidget(main_scroll)
         
-        # Set values from annotation or default labels
         if annotation:
             try:
                 comment_data = json.loads(annotation.comments[0]["body"])
@@ -507,7 +502,6 @@ class AnnotationDialog(QDialog):
             except Exception as e:
                 print(f"Error parsing annotation data: {str(e)}")
         elif hasattr(parent, "annotation_manager") and any(v for v in parent.annotation_manager.default_labels.values()):
-            # Use default labels from annotation manager if available
             default_labels = parent.annotation_manager.default_labels
             comment_data = [
                 {"category": "POSTURE", "selectedValue": default_labels["posture"]},
@@ -519,32 +513,42 @@ class AnnotationDialog(QDialog):
             ]
             self._set_values_from_data(comment_data)
 
+        self.show_all_checkbox.stateChanged.connect(self.on_selection_change)
+        self.pa_selection.selectionChanged.connect(self.on_selection_change)
+        self.hlb_selection.selectionChanged.connect(self.on_selection_change)
+        self.posture_selection.selectionChanged.connect(self.on_selection_change)
+        self.on_selection_change()
+
+    def accept(self):
+        if not self._validate_selections(is_final_check=True):
+             return
+        super().accept()
+
     def _set_values_from_data(self, comment_data):
-        """Helper method to set values from comment data"""
+        self.pa_selection.selectionChanged.disconnect(self.on_selection_change)
+        self.hlb_selection.selectionChanged.disconnect(self.on_selection_change)
+        self.posture_selection.selectionChanged.disconnect(self.on_selection_change)
+
         for item in comment_data:
-            if item["category"] == "POSTURE" and item["selectedValue"]:
-                self.posture_selection.handle_selection(item["selectedValue"])
+            if item["category"] == "POSTURE" and item["selectedValue"]: self.posture_selection.handle_selection(item["selectedValue"])
             elif item["category"] == "HIGH LEVEL BEHAVIOR":
                 values = item["selectedValue"] if isinstance(item["selectedValue"], list) else []
                 for value in values:
-                    if value:
-                        self.hlb_selection.handle_selection(value)
-            elif item["category"] == "PA TYPE" and item["selectedValue"]:
-                self.pa_selection.handle_selection(item["selectedValue"])
+                    if value: self.hlb_selection.handle_selection(value)
+            elif item["category"] == "PA TYPE" and item["selectedValue"]: self.pa_selection.handle_selection(item["selectedValue"])
             elif item["category"] == "Behavioral Parameters":
                 values = item["selectedValue"] if isinstance(item["selectedValue"], list) else []
                 for value in values:
-                    if value:
-                        self.bp_selection.handle_selection(value)
-            elif item["category"] == "Experimental situation" and item["selectedValue"]:
-                self.es_selection.handle_selection(item["selectedValue"])
-            elif item["category"] == "Special Notes" and item["selectedValue"]:
-                self.notes_edit.setText(item["selectedValue"])
+                    if value: self.bp_selection.handle_selection(value)
+            elif item["category"] == "Experimental situation" and item["selectedValue"]: self.es_selection.handle_selection(item["selectedValue"])
+            elif item["category"] == "Special Notes" and item["selectedValue"]: self.notes_edit.setText(item["selectedValue"])
+        
+        self.pa_selection.selectionChanged.connect(self.on_selection_change)
+        self.hlb_selection.selectionChanged.connect(self.on_selection_change)
+        self.posture_selection.selectionChanged.connect(self.on_selection_change)
 
-    def getSelectedValues(self, selection_widget):
-        """Helper method to get selected values from a selection widget"""
-        return selection_widget.selected_values
 
+    def getSelectedValues(self, selection_widget): return selection_widget.selected_values
     @property
     def posture_list(self):
         return self._create_mock_list(self.posture_selection)
@@ -583,7 +587,7 @@ class AnnotationDialog(QDialog):
             
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() >= Qt.Key.Key_1 and event.key() <= Qt.Key.Key_5:
-            index = event.key() - Qt.Key.Key_1  # Convert key to 0-based index
+            index = event.key() - Qt.Key.Key_1
             self.selectCategoryByIndex(index)
         super().keyPressEvent(event)
 
@@ -601,9 +605,26 @@ class AnnotationDialog(QDialog):
             target_combo = category_combos[index]
             target_combo.showPopup()
             QTimer.singleShot(0, lambda: self.setFocus())
-                
+    
+    def load_mappings(self):
+        try:
+            with open('data/mapping/mapping.json', 'r') as f:
+                self.mappings = json.load(f)
+            
+            self.mappings['HLB_to_PA'] = defaultdict(list)
+            for pa, hlb in self.mappings.get('PA_to_HLB', {}).items():
+                self.mappings['HLB_to_PA'][hlb].append(pa)
+
+            self.mappings['POS_to_PA'] = defaultdict(list)
+            for pa, postures in self.mappings.get('PA_to_POS', {}).items():
+                for pos in postures:
+                    self.mappings['POS_to_PA'][pos].append(pa)
+            print("Mappings loaded and processed successfully.")
+        except Exception as e:
+            print(f"Error loading or processing mappings.json: {e}")
+            self.mappings = {}
+
     def load_categories(self):
-        """Load categories from the CSV file"""
         try:
             with open('data/categories/categories.csv', 'r') as f:
                 reader = csv.DictReader(f)
@@ -627,17 +648,113 @@ class AnnotationDialog(QDialog):
                     if row['Experimental situation']:
                         categories['Experimental situation'].append(row['Experimental situation'])
                 
-                self.posture_combo.addItems(categories['POSTURE'])
-                self.hlb_combo.addItems(categories['HIGH LEVEL BEHAVIOR'])
-                self.pa_combo.addItems(categories['PA TYPE'])
-                self.bp_combo.addItems(categories['Behavioral Parameters'])
-                self.es_combo.addItems(categories['Experimental situation'])
-                
+                self.full_categories = categories
+                self.posture_combo.addItems(self.full_categories['POSTURE'])
+                self.hlb_combo.addItems(self.full_categories['HIGH LEVEL BEHAVIOR'])
+                self.pa_combo.addItems(self.full_categories['PA TYPE'])
+                self.bp_combo.addItems(self.full_categories['Behavioral Parameters'])
+                self.es_combo.addItems(self.full_categories['Experimental situation'])
         except Exception as e:
             print(f"Error loading categories: {str(e)}")
-            # Add default items if CSV loading fails
             self.posture_combo.addItem("Posture_Unlabeled")
             self.hlb_combo.addItem("HLB_Unlabeled")
             self.pa_combo.addItem("PA_Type_Unlabeled")
             self.bp_combo.addItem("CP_Unlabeled")
             self.es_combo.addItem("ES_Unlabeled")
+            
+    def on_selection_change(self):
+        self._update_filters_and_validate()
+    
+    def _update_combo_items(self, combo, new_items, category_name):
+        unlabeled_text = new_items[0]
+        combo.blockSignals(True)
+        
+        current_text = combo.currentText()
+        combo.clear()
+        combo.addItems(new_items)
+        
+        if current_text in new_items:
+            combo.setCurrentText(current_text)
+        else:
+            if current_text != unlabeled_text:
+                QMessageBox.information(self, "Selection Reset", 
+                    f"The previously selected '{category_name}' ('{current_text}') is now incompatible "
+                    "due to filtering and has been reset.")
+            combo.setCurrentText(unlabeled_text)
+            
+        combo.blockSignals(False)
+
+    def _update_filters_and_validate(self):
+        if self.show_all_checkbox.isChecked():
+            self._update_combo_items(self.posture_combo, self.full_categories['POSTURE'], "Posture")
+            self._update_combo_items(self.hlb_combo, self.full_categories['HIGH LEVEL BEHAVIOR'], "High Level Behavior")
+            self._update_combo_items(self.pa_combo, self.full_categories['PA TYPE'], "PA Type")
+            self._validate_selections()
+            return
+
+        selected_pa = self.pa_selection.selected_values[0] if self.pa_selection.selected_values else None
+        selected_hlbs = self.hlb_selection.selected_values if self.hlb_selection.selected_values else []
+        selected_posture = self.posture_selection.selected_values[0] if self.posture_selection.selected_values else None
+
+        all_pas = self.full_categories['PA TYPE']
+        pas_for_hlb_sets = [set(self.mappings.get('HLB_to_PA', {}).get(hlb, all_pas)) for hlb in selected_hlbs if hlb != "HLB_Unlabeled"]
+        pas_for_posture_set = set(self.mappings.get('POS_to_PA', {}).get(selected_posture, all_pas))
+        
+        permissible_pas_set = pas_for_posture_set
+        if pas_for_hlb_sets:
+            permissible_pas_set.intersection_update(*pas_for_hlb_sets)
+        
+        permissible_pas = sorted(list(permissible_pas_set))
+        permissible_pas.insert(0, all_pas[0])
+
+        all_hlbs = self.full_categories['HIGH LEVEL BEHAVIOR']
+        mapped_hlb = self.mappings.get('PA_to_HLB', {}).get(selected_pa)
+        permissible_hlb = [all_hlbs[0], mapped_hlb] if mapped_hlb else all_hlbs
+
+        all_postures = self.full_categories['POSTURE']
+        permissible_postures = self.mappings.get('PA_to_POS', {}).get(selected_pa, all_postures)
+        if all_postures[0] not in permissible_postures:
+            permissible_postures = [all_postures[0]] + permissible_postures
+        
+        self._update_combo_items(self.pa_combo, permissible_pas, "PA Type")
+        self._update_combo_items(self.hlb_combo, permissible_hlb, "High Level Behavior")
+        self._update_combo_items(self.posture_combo, permissible_postures, "Posture")
+
+    def _validate_selections(self, is_final_check=False):
+        if not self.show_all_checkbox.isChecked() and not is_final_check:
+            return True
+
+        selected_pa = self.pa_selection.selected_values[0] if self.pa_selection.selected_values else "PA_Type_Unlabeled"
+        selected_hlbs = [hlb for hlb in self.hlb_selection.selected_values if hlb != "HLB_Unlabeled"]
+        selected_posture = self.posture_selection.selected_values[0] if self.posture_selection.selected_values else "Posture_Unlabeled"
+
+        if not is_final_check and (selected_pa == "PA_Type_Unlabeled" or selected_posture == "Posture_Unlabeled"):
+            return True
+
+        error_messages = []
+
+        if selected_pa != "PA_Type_Unlabeled" and selected_posture != "Posture_Unlabeled":
+            allowed_postures = self.mappings.get('PA_to_POS', {}).get(selected_pa)
+            if allowed_postures and selected_posture not in allowed_postures:
+                error_messages.append(f"- Posture '{selected_posture}' is not standard for PA Type '{selected_pa}'.")
+        
+        if selected_pa != "PA_Type_Unlabeled" and selected_hlbs:
+            allowed_hlb = self.mappings.get('PA_to_HLB', {}).get(selected_pa)
+            if allowed_hlb:
+                for hlb in selected_hlbs:
+                    if hlb != allowed_hlb:
+                        error_messages.append(f"- HLB '{hlb}' is not standard for PA Type '{selected_pa}'. (Suggested: {allowed_hlb})")
+        
+        if error_messages:
+            title = "Potential Mismatch" if not is_final_check else "Invalid Combination"
+            intro = "A potential mismatch in labels has been detected:" if not is_final_check else "Cannot save with this invalid combination:"
+            
+            full_message = (f"{intro}\n\n" + "\n".join(error_messages))
+            
+            if is_final_check:
+                full_message += "\n\nPlease correct the selections or check the 'Show all options' box to save anyway."
+            
+            QMessageBox.warning(self, title, full_message)
+            return False
+
+        return True
