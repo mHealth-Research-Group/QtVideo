@@ -107,9 +107,8 @@ class TagWidget(QFrame):
                 border-radius: 4px; 
                 padding: 2px; 
                 margin: 2px;
-                border: 1px solid transparent; /* Add transparent border for smooth transitions */
+                border: 1px solid transparent;
             }
-            /* Style for invalid tags */
             TagWidget[invalid="true"] {
                 border: 1px solid #e53935;
                 background-color: #5f2a2a;
@@ -178,12 +177,14 @@ class SelectionWidget(QWidget):
                 if item and item.widget(): item.widget().deleteLater()
         
         values_to_set = values if (values and values[0] is not None) else [self.unlabeled_text]
-        # Ensure unlabeled text is removed if other values are present
         if len(values_to_set) > 1 and self.unlabeled_text in values_to_set:
             values_to_set.remove(self.unlabeled_text)
 
         for value in values_to_set: self._add_value(value)
         
+        if not self.selected_values:
+            self._add_value(self.unlabeled_text)
+            
         self._update_ui()
         self.selectionChanged.emit()
 
@@ -195,7 +196,7 @@ class SelectionWidget(QWidget):
             if not self.selected_values or text != self.selected_values[0]:
                 self.selected_values = [text]
                 changed = True
-        else: # Multi-select logic
+        else:
             if text != self.unlabeled_text and text not in self.selected_values:
                 if self.unlabeled_text in self.selected_values:
                     self._remove_value(self.unlabeled_text)
@@ -216,7 +217,7 @@ class SelectionWidget(QWidget):
         self.selectionChanged.emit()
 
     def _add_value(self, text):
-        if text and text not in self.selected_values:
+        if text is not None and text not in self.selected_values:
             self.selected_values.append(text)
             if self.multi_select:
                 tag = TagWidget(text)
@@ -291,7 +292,6 @@ class AnnotationDialog(QDialog):
         initial_errors = self._get_validation_errors()
         if initial_errors:
             self.show_all_checkbox.setChecked(True)
-            print("Loaded incompatible data, enabling 'Show all options' automatically.")
 
         self.show_all_checkbox.stateChanged.connect(self._on_settings_change)
         self.disable_alerts_checkbox.stateChanged.connect(self._on_settings_change)
@@ -373,8 +373,13 @@ class AnnotationDialog(QDialog):
     
     def _get_initial_data(self, annotation):
         if annotation and hasattr(annotation, 'comments') and annotation.comments:
-            try: return json.loads(annotation.comments[0]["body"])
-            except Exception as e: QMessageBox.critical(self, "Load Error", f"Failed to parse annotation: {e}"); return None
+            try:
+                if annotation.comments:
+                    return json.loads(annotation.comments[0]["body"])
+                return None
+            except (json.JSONDecodeError, IndexError):
+                QMessageBox.critical(self, "Load Error", f"Failed to parse annotation comments.")
+                return None
         if hasattr(self.parent(), "annotation_manager") and any(v for v in self.parent().annotation_manager.default_labels.values()):
             d = self.parent().annotation_manager.default_labels
             return [ {"category": CAT_POSTURE, "selectedValue": d["posture"]}, {"category": CAT_HLB, "selectedValue": d["hlb"]}, {"category": CAT_PA, "selectedValue": d["pa_type"]}, {"category": CAT_BP, "selectedValue": d["behavioral_params"]}, {"category": CAT_ES, "selectedValue": d["exp_situation"]}, {"category": CAT_NOTES, "selectedValue": d["special_notes"]} ]
@@ -403,7 +408,8 @@ class AnnotationDialog(QDialog):
         if CAT_HLB in errors:
             error_messages.append(f"HLB(s) {', '.join(errors[CAT_HLB])} are incompatible.")
         
-        msg = f"There are incompatible selections for PA Type '{self.pa_selection.selected_values[0]}':\n\n" + "\n".join(f"- {e}" for e in error_messages) + "\n\nDo you want to save anyway?"
+        selected_pa_val = self.pa_selection.selected_values[0] if self.pa_selection.selected_values else "N/A"
+        msg = f"There are incompatible selections for PA Type '{selected_pa_val}':\n\n" + "\n".join(f"- {e}" for e in error_messages) + "\n\nDo you want to save anyway?"
         
         reply = QMessageBox.question(self, "Confirm Save", msg, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
@@ -437,12 +443,12 @@ class AnnotationDialog(QDialog):
         self._run_validation_check()
 
     def _apply_filters(self):
-        selected_pa = self.pa_selection.selected_values[0]
+        selected_pa = self.pa_selection.selected_values[0] if self.pa_selection.selected_values else self.pa_selection.unlabeled_text
         selected_hlbs = []
         for h in self.hlb_selection.selected_values:
             if h != self.hlb_selection.unlabeled_text:
                 selected_hlbs.append(h)
-        selected_posture = self.posture_selection.selected_values[0]
+        selected_posture = self.posture_selection.selected_values[0] if self.posture_selection.selected_values else self.posture_selection.unlabeled_text
 
         all_pas = self.full_categories[CAT_PA]
         if len(selected_hlbs) == 1:
@@ -485,8 +491,8 @@ class AnnotationDialog(QDialog):
             
     def _get_validation_errors(self):
         errors = defaultdict(list)
-        selected_pa = self.pa_selection.selected_values[0]
-        selected_posture = self.posture_selection.selected_values[0]
+        selected_pa = self.pa_selection.selected_values[0] if self.pa_selection.selected_values else self.pa_selection.unlabeled_text
+        selected_posture = self.posture_selection.selected_values[0] if self.posture_selection.selected_values else self.posture_selection.unlabeled_text
         
         if selected_pa == self.pa_selection.unlabeled_text: return {}
 
@@ -551,13 +557,14 @@ class AnnotationDialog(QDialog):
         self.posture_selection.set_unlabeled_text(self.full_categories[CAT_POSTURE][0]); self.hlb_selection.set_unlabeled_text(self.full_categories[CAT_HLB][0]); self.pa_selection.set_unlabeled_text(self.full_categories[CAT_PA][0]); self.bp_selection.set_unlabeled_text(self.full_categories[CAT_BP][0]); self.es_selection.set_unlabeled_text(self.full_categories[CAT_ES][0])
     def _update_combo_items(self, combo, new_items, selection_widget=None):
         combo.blockSignals(True)
-        current_val = selection_widget.selected_values[0] if selection_widget and not selection_widget.multi_select else combo.currentText()
+        current_val = selection_widget.selected_values[0] if selection_widget and not selection_widget.multi_select and selection_widget.selected_values else combo.currentText()
         combo.clear(); combo.addItems(new_items)
         if current_val in new_items: combo.setCurrentText(current_val)
         else:
             if selection_widget and not selection_widget.multi_select:
                 selection_widget.set_values([new_items[0]])
-                QMessageBox.information(self, "Selection Reset", f"'{current_val}' was reset due to incompatibility.")
+                if not self.disable_alerts_checkbox.isChecked():
+                    QMessageBox.information(self, "Selection Reset", f"'{current_val}' was reset due to incompatibility.")
         combo.blockSignals(False)
     def _get_stylesheet(self):
         return """
