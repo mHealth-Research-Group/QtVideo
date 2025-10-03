@@ -156,43 +156,42 @@ class AnnotationManager:
         else:
              QMessageBox.information(self.app, "Delete Label", "The playback position is not currently inside any annotation.")
 
-    def moveToPreviousLabel(self):
-        sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
-        current_time = self.app.media_player['_position'] / 1000.0
-        target_time = -1 
-        current_idx = self.get_current_annotation_index(sorted_annotations)
 
-        if current_idx > 0:
-            target_time = sorted_annotations[current_idx - 1].end_time
-        elif current_idx == 0:
-             target_time = 0
-             print("At first label, moving to start.")
+    def moveToPreviousLabel(self):
+        if not self.app.annotations:
+            return
+        boundary_points = sorted(list(set(
+            p for ann in self.app.annotations for p in (ann.start_time, ann.end_time)
+        )))
+
+        current_time = self.app.media_player['_position'] / 1000.0
+        target_time = -1
+        tolerance = 0.05 
+
+        for point in reversed(boundary_points):
+            if point < current_time - tolerance:
+                target_time = point
+                break
         else:
-            for annotation in reversed(sorted_annotations):
-                if annotation.end_time < current_time:
-                    target_time = annotation.end_time
-                    break
+            target_time = 0
 
         if target_time != -1:
             self.app.setPosition(int(target_time * 1000))
 
     def moveToNextLabel(self):
-        sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
+        if not self.app.annotations:
+            return
+        boundary_points = sorted(list(set(
+            p for ann in self.app.annotations for p in (ann.start_time, ann.end_time)
+        )))
+
         current_time = self.app.media_player['_position'] / 1000.0
         target_time = -1
-        current_idx = self.get_current_annotation_index(sorted_annotations)
-
-        if current_idx != -1:
-             if current_idx < len(sorted_annotations) - 1:
-                 target_time = sorted_annotations[current_idx + 1].start_time
-             else:
-                  print("At last label.")
-                  pass
-        else:
-            for annotation in sorted_annotations:
-                if annotation.start_time > current_time:
-                    target_time = annotation.start_time
-                    break
+        tolerance = 0.05
+        for point in boundary_points:
+            if point > current_time + tolerance:
+                target_time = point
+                break
 
         if target_time != -1:
             self.app.setPosition(int(target_time * 1000))

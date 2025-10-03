@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QFileDialog, QLabel, QMessageBox,
                              QMenu)
 from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
-from PyQt6.QtGui import QAction, QPalette
+from PyQt6.QtGui import QAction, QPalette, QGuiApplication
 from PyQt6.QtQuickWidgets import QQuickWidget
 from src.slider import CustomSlider
 from src.models import TimelineAnnotation
@@ -28,7 +28,13 @@ class VideoPlayerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video Annotator")
-        self.setGeometry(100, 100, 1280, 1000)
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            available_geometry = screen.availableGeometry()
+            self.resize(int(available_geometry.width() * 0.85), int(available_geometry.height() * 0.9))
+            self.move(available_geometry.center() - self.rect().center())
+        else:
+            self.setGeometry(100, 100, 1280, 1000)
 
         
         self.autosave_manager = AutosaveManager(60000) 
@@ -39,6 +45,7 @@ class VideoPlayerApp(QMainWindow):
         self.current_annotation = None 
         self.zoom_start = 0.0 
         self.zoom_end = 1.0 
+        self._is_navigating = False
         self.PREVIEW_OFFSET = self.BASE_PREVIEW_OFFSET
 
         
@@ -875,18 +882,23 @@ class VideoPlayerApp(QMainWindow):
         if hasattr(self, 'timeline_widget'): self.timeline_widget.update()
         if hasattr(self, 'second_timeline_widget'): self.second_timeline_widget.update()
     
+    # In VideoPlayerApp class
     def _sync_preview_qml_position(self, main_position):
         """Seeks the preview player to main_position + offset."""
-        print(f"--- _sync_preview_qml_position called with: {main_position} ms")
         if not self.qml_root_preview or self.media_player['_duration'] <= 0: return
-        target_preview_pos = main_position + self.PREVIEW_OFFSET
-        target_preview_pos = max(0, min(target_preview_pos, self.media_player['_duration'])) 
+
+        # If we are navigating, sync exactly. Otherwise, add the offset.
+        if self._is_navigating:
+            target_preview_pos = main_position
+        else:
+            target_preview_pos = main_position + self.PREVIEW_OFFSET
+
+        target_preview_pos = max(0, min(target_preview_pos, self.media_player['_duration']))
         current_preview_pos = self.qml_root_preview.property('position')
-        print(f"--- Syncing preview position: {target_preview_pos} ms (current: {current_preview_pos} ms)")
+
         is_seeking = self.timeline.isSliderDown() or self.second_timeline.isSliderDown()
-        
-        if abs(target_preview_pos - current_preview_pos) > self.SYNC_THRESHOLD or is_seeking:
-            
+
+        if abs(target_preview_pos - current_preview_pos) > self.SYNC_THRESHOLD or is_seeking or self._is_navigating:
             self.qml_root_preview.seek(target_preview_pos)
 
     def saveAnnotations(self):
@@ -1077,10 +1089,16 @@ class VideoPlayerApp(QMainWindow):
     
     def deleteCurrentLabel(self): self.annotation_manager.deleteCurrentLabel()
     
-    def moveToPreviousLabel(self): self.annotation_manager.moveToPreviousLabel()
+    def moveToPreviousLabel(self): 
+        self._is_navigating = True
+        self.annotation_manager.moveToPreviousLabel()
+        QTimer.singleShot(100, lambda: setattr(self, '_is_navigating', False))
     
-    def moveToNextLabel(self): self.annotation_manager.moveToNextLabel()
-    
+    def moveToNextLabel(self): 
+        self._is_navigating = True
+        self.annotation_manager.moveToNextLabel()
+        QTimer.singleShot(100, lambda: setattr(self, '_is_navigating', False))
+
     def mergeWithPrevious(self): self.annotation_manager.mergeWithPrevious()
     
     def mergeWithNext(self): self.annotation_manager.mergeWithNext()
