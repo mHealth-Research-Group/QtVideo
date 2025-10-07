@@ -183,6 +183,9 @@ class SelectionWidget(QWidget):
             values_to_set.remove(self.unlabeled_text)
 
         for value in values_to_set: self._add_value(value)
+
+        if not self.selected_values:
+            self._add_value(self.unlabeled_text)
         
         self._update_ui()
         self.selectionChanged.emit()
@@ -551,7 +554,7 @@ class AnnotationDialog(QDialog):
         self.posture_selection.set_unlabeled_text(self.full_categories[CAT_POSTURE][0]); self.hlb_selection.set_unlabeled_text(self.full_categories[CAT_HLB][0]); self.pa_selection.set_unlabeled_text(self.full_categories[CAT_PA][0]); self.bp_selection.set_unlabeled_text(self.full_categories[CAT_BP][0]); self.es_selection.set_unlabeled_text(self.full_categories[CAT_ES][0])
     def _update_combo_items(self, combo, new_items, selection_widget=None):
         combo.blockSignals(True)
-        current_val = selection_widget.selected_values[0] if selection_widget and not selection_widget.multi_select else combo.currentText()
+        current_val = selection_widget.selected_values[0] if selection_widget and not selection_widget.multi_select and selection_widget.selected_values else combo.currentText()
         combo.clear(); combo.addItems(new_items)
         if current_val in new_items: combo.setCurrentText(current_val)
         else:
