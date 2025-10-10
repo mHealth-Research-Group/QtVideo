@@ -8,23 +8,19 @@ import sys
 
 # PyQt6 imports
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QSlider, QPushButton, QFileDialog, QLabel, QMessageBox,
-                             QMenu, QApplication)
-from PyQt6.QtCore import Qt, QUrl, QTime, QTimer, QObject
-from PyQt6.QtGui import QKeyEvent, QPainter, QAction, QPalette 
+                             QPushButton, QFileDialog, QLabel, QMessageBox,
+                             QMenu)
+from PyQt6.QtCore import Qt, QUrl, QTime, QTimer
+from PyQt6.QtGui import QAction, QPalette, QGuiApplication
 from PyQt6.QtQuickWidgets import QQuickWidget
-
-
+from src.slider import CustomSlider
 from src.models import TimelineAnnotation
 from src.widgets import TimelineWidget
 from src.dialogs import AnnotationDialog
 from src.shortcuts import ShortcutManager
 from src.annotation_manager import AnnotationManager
 from src.utils import AutosaveManager
-
 class VideoPlayerApp(QMainWindow):
-    
-    
     SYNC_THRESHOLD = 150
     MIN_ZOOM_DURATION = 600000 # 10 minutes in ms
     BASE_PREVIEW_OFFSET = 2000  # 2 seconds in ms
@@ -32,7 +28,13 @@ class VideoPlayerApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Video Annotator")
-        self.setGeometry(100, 100, 1280, 1000)
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            available_geometry = screen.availableGeometry()
+            self.resize(int(available_geometry.width() * 0.85), int(available_geometry.height() * 0.9))
+            self.move(available_geometry.center() - self.rect().center())
+        else:
+            self.setGeometry(100, 100, 1280, 1000)
 
         
         self.autosave_manager = AutosaveManager(60000) 
@@ -43,6 +45,7 @@ class VideoPlayerApp(QMainWindow):
         self.current_annotation = None 
         self.zoom_start = 0.0 
         self.zoom_end = 1.0 
+        self._is_navigating = False
         self.PREVIEW_OFFSET = self.BASE_PREVIEW_OFFSET
 
         
@@ -168,40 +171,17 @@ class VideoPlayerApp(QMainWindow):
         
         main_timeline_container = QWidget(); 
         main_timeline_container.setMinimumHeight(50)
-        self.timeline = QSlider(Qt.Orientation.Horizontal)
+
+        self.timeline = CustomSlider(Qt.Orientation.Horizontal, show_handle=True)
         self.timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=True))
         self.timeline.sliderPressed.connect(self.sliderPressed)
         self.timeline.sliderReleased.connect(self.sliderReleased)
-        self.timeline.mousePressEvent = lambda e: self.timelineMousePress(e, self.timeline)
         self.timeline.setEnabled(False) 
         self.timeline_widget = TimelineWidget(self, show_position=False, is_main_timeline=True)
         main_timeline_layout = QVBoxLayout(main_timeline_container); 
-        main_timeline_layout.setSpacing(2); 
+        main_timeline_layout.setSpacing(20); 
         main_timeline_layout.setContentsMargins(0, 0, 0, 0)
         main_timeline_layout.addWidget(self.timeline_widget)
-        self.timeline.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 4px;
-                background: #404040;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                background: #4a90e2;
-                width: 16px;
-                height: 16px;
-                margin: -6px 0;
-                border-radius: 8px;
-                border: 2px solid #2b2b2b;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #5aa0f2;
-            }
-            QSlider::sub-page:horizontal {
-                background: #4a90e2;
-                border-radius: 2px;
-            }
-        """)
-        
         main_timeline_layout.addWidget(self.timeline)
         timelines_layout.addWidget(main_timeline_container)
         
@@ -224,30 +204,13 @@ class VideoPlayerApp(QMainWindow):
         second_timeline_layout.setSpacing(2); 
         second_timeline_layout.setContentsMargins(0, 0, 0, 0)
         
-        
-        self.second_timeline = QSlider(Qt.Orientation.Horizontal)
+        # --- REPLACEMENT: Use CustomSlider instead of QSlider ---
+        self.second_timeline = CustomSlider(Qt.Orientation.Horizontal, show_handle=False)
         self.second_timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=False))
         self.second_timeline.sliderPressed.connect(self.sliderPressed)
         self.second_timeline.sliderReleased.connect(self.sliderReleased)
-        self.second_timeline.mousePressEvent = lambda e: self.timelineMousePress(e, self.second_timeline)
         self.second_timeline.setEnabled(False) 
         
-        self.second_timeline.setStyleSheet("""
-            QSlider::groove:horizontal {
-                height: 4px;
-                background: #404040;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                width: 0px;
-                height: 0px;
-                margin: 0px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #4a90e2;
-                border-radius: 2px;
-            }
-        """)
         self.second_timeline_widget = TimelineWidget(self, show_position=True, is_main_timeline=False)
         second_timeline_layout.addWidget(self.second_timeline_widget)
         second_timeline_layout.addWidget(self.second_timeline)
@@ -667,7 +630,8 @@ class VideoPlayerApp(QMainWindow):
         media_has_ended = (status == 6)
 
         if media_is_ready:
-             self._setup_timeline_zoom()
+             if self.media_player['_duration'] == 0:  # Only setup zoom on initial load
+                 self._setup_timeline_zoom()
              print("--- Media loaded/prepared (QML), enabling controls & updating UI state")
              
              self.qmlDurationChanged(self.qml_root_main.property('duration'))
@@ -889,16 +853,18 @@ class VideoPlayerApp(QMainWindow):
         self.qml_root_preview.seek(target_position + self.PREVIEW_OFFSET)
         self.media_player['_position'] = target_position
 
-        if from_main:
-            self.timeline.setValue(target_position)
-            if self.media_player['_duration'] > 0:
-                zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
-                zoom_start = self.zoom_start * self.media_player['_duration']
-                if target_position >= zoom_start and target_position <= (zoom_start + zoom_duration):
-                    relative_pos = (target_position - zoom_start) / zoom_duration
-                    self.second_timeline.setValue(int(relative_pos * self.second_timeline.maximum()))
-        else:
-            self.timeline.setValue(target_position)
+        self.timeline.setValue(target_position)
+        
+        if self.media_player['_duration'] > 0:
+            zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
+            zoom_start = self.zoom_start * self.media_player['_duration']
+            if target_position >= zoom_start and target_position <= (zoom_start + zoom_duration):
+                relative_pos = (target_position - zoom_start) / zoom_duration
+                self.second_timeline.setValue(int(relative_pos * self.second_timeline.maximum()))
+            elif target_position < zoom_start:
+                self.second_timeline.setValue(0)
+            else:
+                self.second_timeline.setValue(self.second_timeline.maximum())
 
     def _setup_timeline_zoom(self):
          """Sets timeline zoom state variables based on duration."""
@@ -916,18 +882,23 @@ class VideoPlayerApp(QMainWindow):
         if hasattr(self, 'timeline_widget'): self.timeline_widget.update()
         if hasattr(self, 'second_timeline_widget'): self.second_timeline_widget.update()
     
+    # In VideoPlayerApp class
     def _sync_preview_qml_position(self, main_position):
         """Seeks the preview player to main_position + offset."""
-        print(f"--- _sync_preview_qml_position called with: {main_position} ms")
         if not self.qml_root_preview or self.media_player['_duration'] <= 0: return
-        target_preview_pos = main_position + self.PREVIEW_OFFSET
-        target_preview_pos = max(0, min(target_preview_pos, self.media_player['_duration'])) 
+
+        # If we are navigating, sync exactly. Otherwise, add the offset.
+        if self._is_navigating:
+            target_preview_pos = main_position
+        else:
+            target_preview_pos = main_position + self.PREVIEW_OFFSET
+
+        target_preview_pos = max(0, min(target_preview_pos, self.media_player['_duration']))
         current_preview_pos = self.qml_root_preview.property('position')
-        print(f"--- Syncing preview position: {target_preview_pos} ms (current: {current_preview_pos} ms)")
+
         is_seeking = self.timeline.isSliderDown() or self.second_timeline.isSliderDown()
-        
-        if abs(target_preview_pos - current_preview_pos) > self.SYNC_THRESHOLD or is_seeking:
-            
+
+        if abs(target_preview_pos - current_preview_pos) > self.SYNC_THRESHOLD or is_seeking or self._is_navigating:
             self.qml_root_preview.seek(target_preview_pos)
 
     def saveAnnotations(self):
@@ -1101,34 +1072,8 @@ class VideoPlayerApp(QMainWindow):
     
     def sliderReleased(self):
         
-        
-        slider = self.sender()
-        if slider == self.timeline or slider == self.second_timeline:
-            
-            if self.qml_root_main and self.qml_root_main.property('isSeekable'):
-                self.seekFromSlider(slider.value()) 
         pass
 
-    
-    def timelineMousePress(self, event, slider):
-        """Custom mouse press handler for timeline sliders"""
-        if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position().x()
-            width = slider.width()
-            relative_pos = max(0, min(1, pos / width))
-            
-            # Convert to value in slider range
-            value_range = slider.maximum() - slider.minimum()
-            value = int(slider.minimum() + (relative_pos * value_range))
-            
-            # Update slider and seek
-            slider.setValue(value)
-            if slider == self.timeline:
-                self.setPosition(value, from_main=True)
-            else:
-                self.setPosition(value, from_main=False)
-            
-        QSlider.mousePressEvent(slider, event)
     
     
     
@@ -1144,10 +1089,16 @@ class VideoPlayerApp(QMainWindow):
     
     def deleteCurrentLabel(self): self.annotation_manager.deleteCurrentLabel()
     
-    def moveToPreviousLabel(self): self.annotation_manager.moveToPreviousLabel()
+    def moveToPreviousLabel(self): 
+        self._is_navigating = True
+        self.annotation_manager.moveToPreviousLabel()
+        QTimer.singleShot(100, lambda: setattr(self, '_is_navigating', False))
     
-    def moveToNextLabel(self): self.annotation_manager.moveToNextLabel()
-    
+    def moveToNextLabel(self): 
+        self._is_navigating = True
+        self.annotation_manager.moveToNextLabel()
+        QTimer.singleShot(100, lambda: setattr(self, '_is_navigating', False))
+
     def mergeWithPrevious(self): self.annotation_manager.mergeWithPrevious()
     
     def mergeWithNext(self): self.annotation_manager.mergeWithNext()
