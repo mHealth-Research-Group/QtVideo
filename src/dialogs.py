@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QL
                            QGridLayout, QFrame, QScrollArea, QLayout, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint, QTimer, QSettings
 from PyQt6.QtGui import QKeyEvent
+from src.utils import resource_path
 
 # Constants
 APP_NAME = "AnnotationTool"
@@ -537,14 +538,16 @@ class AnnotationDialog(QDialog):
         if 0 <= index < len(category_combos): category_combos[index].showPopup()
     def load_mappings(self):
         try:
-            with open('data/mapping/mapping.json', 'r') as f: self.mappings = json.load(f)
+            path = resource_path('data/mapping/mapping.json')
+            with open(path, 'r') as f: self.mappings = json.load(f)
             self.mappings['HLB_to_PA'] = defaultdict(list); [self.mappings['HLB_to_PA'][hlb].append(pa) for pa, hlb in self.mappings.get('PA_to_HLB', {}).items()]
             self.mappings['POS_to_PA'] = defaultdict(list); [[self.mappings['POS_to_PA'][pos].append(pa) for pos in postures] for pa, postures in self.mappings.get('PA_to_POS', {}).items()]
             return True
         except Exception as e: QMessageBox.critical(self, "Config Error", f"Could not load mapping.json:\n{e}"); return False
     def load_categories(self):
         try:
-            with open('data/categories/categories.csv', 'r') as f:
+            path = resource_path('data/categories/categories.csv')
+            with open(path, 'r') as f:
                 categories = defaultdict(list); [categories[cat].append(val) for row in csv.DictReader(f) for cat, val in row.items() if val]
                 self.full_categories = { CAT_POSTURE: ["Posture_Unlabeled"] + categories[CAT_POSTURE], CAT_HLB: ["HLB_Unlabeled"] + categories[CAT_HLB], CAT_PA: ["PA_Type_Unlabeled"] + categories[CAT_PA], CAT_BP: ["CP_Unlabeled"] + categories[CAT_BP], CAT_ES: ["ES_Unlabeled"] + categories[CAT_ES] }
             return True

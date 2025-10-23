@@ -4,6 +4,8 @@ from pathlib import Path
 import tempfile
 from typing import List, Optional, Tuple
 from src.models import TimelineAnnotation
+import sys
+from pathlib import Path
 
 class AutosaveManager:
     def __init__(self, interval: int = 300000) -> None: 
@@ -112,3 +114,17 @@ def autosave(func):
             self.app.autosave()
 
     return wrapper
+
+
+def resource_path(relative_path: str) -> str:
+    try:
+        base_path = getattr(sys, '_MEIPASS', None)
+    except Exception:
+        base_path = None
+
+    if base_path:
+        return str(Path(base_path) / relative_path)
+    here = Path(__file__).resolve().parent
+    repo_root = here.parent
+    candidate = repo_root / relative_path
+    return str(candidate)
