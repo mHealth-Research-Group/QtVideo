@@ -34,6 +34,7 @@ jobs:
           --windowed
           --onefile
           --add-data "src/VideoPlayer.qml;src" # Windows uses ';' separator for paths
+          --add-data "data;data" # include data folder (mapping, categories) in bundle
         )
 
         PLUGIN_DIRS=(
@@ -96,6 +97,7 @@ jobs:
           --windowed
           --onedir
           --add-data "src/VideoPlayer.qml:src" # macOS uses ':' separator for paths
+          --add-data "data:data" # include data folder (mapping, categories) in bundle
         )
 
         PLUGIN_DIRS=(
@@ -169,6 +171,7 @@ jobs:
           --windowed
           --onefile
           --add-data "src/VideoPlayer.qml:src" # Linux uses ':' separator for paths
+          --add-data "data:data" # include data folder (mapping, categories) in bundle
         )
 
         PLUGIN_DIRS=(
