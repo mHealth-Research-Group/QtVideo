@@ -55,6 +55,28 @@ class AnnotationManager:
                 return i
         return -1
 
+    def _get_labels_from_annotation(self, annotation):
+        if not annotation or not annotation.comments:
+            return {"POSTURE": None, "HIGH LEVEL BEHAVIOR": [], "PA TYPE": None}
+        try:
+            body_data = json.loads(annotation.comments[0].get("body", "[]"))
+            data_map = {item.get("category"): item.get("selectedValue") for item in body_data}
+            return {
+                "POSTURE": data_map.get("POSTURE"),
+                "HIGH LEVEL BEHAVIOR": sorted(data_map.get("HIGH LEVEL BEHAVIOR", [])),
+                "PA TYPE": data_map.get("PA TYPE")
+            }
+        except json.JSONDecodeError:
+            return {"POSTURE": None, "HIGH LEVEL BEHAVIOR": [], "PA TYPE": None}
+
+    def _annotations_have_different_labels(self, ann1, ann2):
+        labels1 = self._get_labels_from_annotation(ann1)
+        labels2 = self._get_labels_from_annotation(ann2)
+        return (labels1["POSTURE"] != labels2["POSTURE"] or
+                labels1["HIGH LEVEL BEHAVIOR"] != labels2["HIGH LEVEL BEHAVIOR"] or
+                labels1["PA TYPE"] != labels2["PA TYPE"])
+
+
     @autosave
     def toggleAnnotation(self):
         current_time = self.app.media_player['_position'] / 1000.0
@@ -164,12 +186,16 @@ class AnnotationManager:
                                            QMessageBox.StandardButton.No)
 
             if confirm == QMessageBox.StandardButton.Yes:
-                try:
-                    self.app.annotations.remove(annotation_to_delete)
+                annotation_id_to_delete = annotation_to_delete.id
+                initial_length = len(self.app.annotations)
+                self.app.annotations = [ann for ann in self.app.annotations if ann.id != annotation_id_to_delete]
+
+                if len(self.app.annotations) < initial_length:
                     self.app.updateAnnotationTimeline()
-                    print(f"Deleted annotation: {annotation_to_delete.start_time:.2f}s - {annotation_to_delete.end_time:.2f}s")
-                except ValueError:
-                     print("Error: Annotation to delete not found in main list.")
+                    print(f"Deleted annotation: {annotation_to_delete.start_time:.2f}s - {annotation_to_delete.end_time:.2f}s (ID: {annotation_id_to_delete})")
+                else:
+                    print(f"Error: Annotation with ID {annotation_id_to_delete} not found in main list for deletion.")
+
         else:
              QMessageBox.information(self.app, "Delete Label", "The playback position is not currently inside any annotation.")
 
@@ -233,6 +259,15 @@ class AnnotationManager:
             QMessageBox.warning(self.app, "Invalid Merge", f"Cannot merge: Annotations are not adjacent (Gap: {gap:.3f}s).")
             return
 
+        if self._annotations_have_different_labels(prev_annotation, current_annotation):
+            reply = QMessageBox.question(self.app, "Label Conflict",
+                                         "The labels for these adjacent annotations differ.\nMerging will use the labels from the current annotation (the later one).\n\nDo you want to proceed?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                                         QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Cancel:
+                print("Merge cancelled due to label conflict.")
+                return
+
         merged_annotation = TimelineAnnotation(
             start_time=prev_annotation.start_time,
             end_time=current_annotation.end_time
@@ -270,6 +305,16 @@ class AnnotationManager:
         if abs(gap) > 0.1:
             QMessageBox.warning(self.app, "Invalid Merge", f"Cannot merge: Annotations are not adjacent (Gap: {gap:.3f}s).")
             return
+
+        if self._annotations_have_different_labels(current_annotation, next_annotation):
+            reply = QMessageBox.question(self.app, "Label Conflict",
+                                         "The labels for these adjacent annotations differ.\nMerging will use the labels from the current annotation (the earlier one).\n\nDo you want to proceed?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                                         QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Cancel:
+                print("Merge cancelled due to label conflict.")
+                return
+
 
         merged_annotation = TimelineAnnotation(
             start_time=current_annotation.start_time,
