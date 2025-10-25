@@ -287,8 +287,7 @@ class VideoPlayerApp(QMainWindow):
         self.speed_label = QLabel("1.0x")
         self.speed_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; min-width: 50px; text-align: center; }")
         self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        self.preview_offset_label = QLabel(f"Skip: {self.PREVIEW_OFFSET}ms")
+        self.preview_offset_label = QLabel(f"Skip: {self.PREVIEW_OFFSET / 1000:.1f}s")
         self.preview_offset_label.setStyleSheet("QLabel { color: white; padding: 8px; background-color: #2a2a2a; border-radius: 4px; text-align: center; }")
         self.preview_offset_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
@@ -639,7 +638,7 @@ class VideoPlayerApp(QMainWindow):
              # Update preview offset based on new speed
              self.PREVIEW_OFFSET = self._calculate_preview_offset()
              self._sync_preview_qml_position(self.media_player['_position'])
-             self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
+             self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET / 1000:.1f}s")
 
     
     def qmlMediaStatusChanged(self, status):
@@ -817,7 +816,7 @@ class VideoPlayerApp(QMainWindow):
         if self.qml_root_preview:
             self._sync_preview_qml_position(self.media_player['_position'])
             print(f"--- Adjusted base preview offset to: {self.BASE_PREVIEW_OFFSET} ms (effective: {self.PREVIEW_OFFSET} ms)")
-            self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET}ms")
+            self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET / 1000:.1f}s")
         else:
             print("--- adjustPreviewOffset: QML preview root missing.")
 
@@ -853,6 +852,16 @@ class VideoPlayerApp(QMainWindow):
     def resetPlaybackRate(self):
          """Resets playback rate to 1.0x."""
          self.setPlaybackRate(1.0)
+
+    def resetPreviewOffset(self):
+        """Resets the preview offset to default."""
+        if self.qml_root_preview:
+            self._sync_preview_qml_position(self.media_player['_position'])
+            print(f"--- Reset preview offset to default: {self.BASE_PREVIEW_OFFSET} ms (effective: {self.PREVIEW_OFFSET} ms)")
+            self.preview_offset_label.setText(f"Skip: {self.PREVIEW_OFFSET / 1000:.1f}s")
+        else:
+            print("--- resetPreviewOffset: QML preview root missing.")
+    
 
     def setPosition(self, position, from_main=True):
         """Sets the position of the QML player."""
