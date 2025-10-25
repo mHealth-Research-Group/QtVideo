@@ -538,33 +538,54 @@ class VideoPlayerApp(QMainWindow):
          self.timeline.setEnabled(False)
          self.second_timeline.setEnabled(False)
 
-
-    
-    
     def qmlPositionChanged(self, position):
-        self.media_player['_position'] = int(position) 
+        if self.media_player['_duration'] <= 0:
+            return
+
+        self.media_player['_position'] = int(position)
+        current_pos_percent = position / self.media_player['_duration']
+        zoom_width = self.zoom_end - self.zoom_start
+        edge_threshold = 0.2
+        smoothing_factor = 0.05
+        target_zoom_start = self.zoom_start
+        scroll_trigger_right = self.zoom_end - (zoom_width * edge_threshold)
+        scroll_trigger_left = self.zoom_start + (zoom_width * edge_threshold)
+
+        if current_pos_percent > scroll_trigger_right:
+            target_zoom_start = current_pos_percent - (zoom_width * (1 - edge_threshold))
+        elif current_pos_percent < scroll_trigger_left:
+            target_zoom_start = current_pos_percent - (zoom_width * edge_threshold)
+
+        target_zoom_start = max(0.0, min(target_zoom_start, 1.0 - zoom_width))
+        self.zoom_start += (target_zoom_start - self.zoom_start) * smoothing_factor
+        self.zoom_start = max(0.0, min(self.zoom_start, 1.0 - zoom_width))
+        self.zoom_end = self.zoom_start + zoom_width
+
         if not self.timeline.isSliderDown():
-             self.timeline.setValue(self.media_player['_position'])
-        if not self.second_timeline.isSliderDown() and self.media_player['_duration'] > 0:
-            zoom_duration = (self.zoom_end - self.zoom_start) * self.media_player['_duration']
-            zoom_start = self.zoom_start * self.media_player['_duration']
+            self.timeline.setValue(self.media_player['_position'])
+
+        if not self.second_timeline.isSliderDown():
+            zoom_duration_ms = zoom_width * self.media_player['_duration']
+            zoom_start_ms = self.zoom_start * self.media_player['_duration']
             max_slider_val = self.second_timeline.maximum()
-            
-            if position >= zoom_start and position <= (zoom_start + zoom_duration) and zoom_duration > 0 and max_slider_val > 0:
-                relative_pos_in_zoom = (position - zoom_start) / zoom_duration
+
+            if position >= zoom_start_ms and position <= (zoom_start_ms + zoom_duration_ms) and zoom_duration_ms > 0 and max_slider_val > 0:
+                relative_pos_in_zoom = (position - zoom_start_ms) / zoom_duration_ms
                 slider_value = int(relative_pos_in_zoom * max_slider_val)
                 self.second_timeline.setValue(slider_value)
-            elif position < zoom_start: self.second_timeline.setValue(0)
-            else: self.second_timeline.setValue(max_slider_val) 
+            elif position < zoom_start_ms:
+                self.second_timeline.setValue(0)
+            else:
+                self.second_timeline.setValue(max_slider_val)
 
-        
         current_time = QTime(0, 0).addMSecs(self.media_player['_position']).toString('hh:mm:ss')
         total_time = QTime(0, 0).addMSecs(self.media_player['_duration']).toString('hh:mm:ss')
         self.time_label.setText(f"{current_time} / {total_time}")
 
-        
-        if hasattr(self, 'timeline_widget'): self.timeline_widget.update()
-        if hasattr(self, 'second_timeline_widget'): self.second_timeline_widget.update()
+        if hasattr(self, 'timeline_widget'):
+            self.timeline_widget.update()
+        if hasattr(self, 'second_timeline_widget'):
+            self.second_timeline_widget.update()
 
         
         
