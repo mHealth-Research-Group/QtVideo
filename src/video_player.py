@@ -205,7 +205,7 @@ class VideoPlayerApp(QMainWindow):
         second_timeline_layout.setContentsMargins(0, 0, 0, 0)
         
         # --- REPLACEMENT: Use CustomSlider instead of QSlider ---
-        self.second_timeline = CustomSlider(Qt.Orientation.Horizontal, show_handle=False)
+        self.second_timeline = CustomSlider(Qt.Orientation.Horizontal, show_handle=True)
         self.second_timeline.sliderMoved.connect(lambda pos: self.setPosition(pos, from_main=False))
         self.second_timeline.sliderPressed.connect(self.sliderPressed)
         self.second_timeline.sliderReleased.connect(self.sliderReleased)
