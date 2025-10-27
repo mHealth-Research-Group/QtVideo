@@ -39,20 +39,20 @@ python main.py
 
 ### Basic Workflow
 
-1. **Open Video**: Click "Open Video" or use the gear menu � "New Video"
+1. **Open Video**: Click "Open Video" or use the gear menu → "New Video"
 2. **Create Annotation**: Press `A` to start labeling at current position, press `A` again to finish
 3. **Edit Labels**: Press `G` to open the category selection dialog
 4. **Navigate**: Use arrow keys to skip through video, or Shift+Arrow to jump between labels
-5. **Export**: Use gear menu � "Export Labels" to save annotations
+5. **Export**: Use gear menu → "Export Labels" to save annotations
 
 ### Keyboard Shortcuts
 
 #### Video Controls
 - `Spacebar` - Play/Pause
-- `�/�` - Skip 10s backward/forward
-- `�/�` - Increase/decrease playback speed
+- `←/→` - Skip 10s backward/forward
+- `↑/↓` - Increase/decrease playback speed
 - `R` - Reset speed to 1.0x
-- `Shift+�/�` - Adjust preview skip offset
+- `Shift+↑/↓` - Adjust preview skip offset
 
 #### Annotation Controls
 - `A` - Start/Stop labeling
@@ -62,7 +62,7 @@ python main.py
 - `P` - Split label at current position
 
 #### Navigation
-- `Shift+�/�` - Jump to previous/next label boundary
+- `Shift+←/→` - Jump to previous/next label boundary
 - `N` - Merge with previous label
 - `M` - Merge with next label
 
