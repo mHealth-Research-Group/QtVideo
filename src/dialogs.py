@@ -377,11 +377,22 @@ class AnnotationDialog(QDialog):
     
     def _get_initial_data(self, annotation):
         if annotation and hasattr(annotation, 'comments') and annotation.comments:
-            try: return json.loads(annotation.comments[0]["body"])
-            except Exception as e: QMessageBox.critical(self, "Load Error", f"Failed to parse annotation: {e}"); return None
-        if hasattr(self.parent(), "annotation_manager") and any(v for v in self.parent().annotation_manager.default_labels.values()):
-            d = self.parent().annotation_manager.default_labels
-            return [ {"category": CAT_POSTURE, "selectedValue": d["posture"]}, {"category": CAT_HLB, "selectedValue": d["hlb"]}, {"category": CAT_PA, "selectedValue": d["pa_type"]}, {"category": CAT_BP, "selectedValue": d["behavioral_params"]}, {"category": CAT_ES, "selectedValue": d["exp_situation"]}, {"category": CAT_NOTES, "selectedValue": d["special_notes"]} ]
+            try:
+                return json.loads(annotation.comments[0]["body"])
+            except Exception as e:
+                QMessageBox.critical(self, "Load Error", f"Failed to parse annotation: {e}")
+                return None
+        elif hasattr(self.parent(), "annotation_manager") and hasattr(self.parent().annotation_manager, "last_used_labels"):
+            d = self.parent().annotation_manager.last_used_labels
+            if any(v for k, v in d.items() if k != "special_notes" or v):
+                return [
+                    {"category": CAT_POSTURE, "selectedValue": d["posture"]},
+                    {"category": CAT_HLB, "selectedValue": d["hlb"]},
+                    {"category": CAT_PA, "selectedValue": d["pa_type"]},
+                    {"category": CAT_BP, "selectedValue": d["behavioral_params"]},
+                    {"category": CAT_ES, "selectedValue": d["exp_situation"]},
+                    {"category": CAT_NOTES, "selectedValue": d.get("special_notes", "")}
+                ]
         return None
 
     def _set_values_from_data(self, data):
