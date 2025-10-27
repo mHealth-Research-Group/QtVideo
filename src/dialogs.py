@@ -8,10 +8,11 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QL
                            QGridLayout, QFrame, QScrollArea, QLayout, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint, QTimer, QSettings
 from PyQt6.QtGui import QKeyEvent
+from src.utils import resource_path
 
 # Constants
-APP_NAME = "AnnotationTool"
-ORGANIZATION_NAME = "MyOrg"
+APP_NAME = "PAAWS-Annotation-Software"
+ORGANIZATION_NAME = "PAAWS"
 SETTINGS_DISABLE_ALERTS = "disableAlerts"
 
 CAT_POSTURE = "POSTURE"
@@ -376,11 +377,22 @@ class AnnotationDialog(QDialog):
     
     def _get_initial_data(self, annotation):
         if annotation and hasattr(annotation, 'comments') and annotation.comments:
-            try: return json.loads(annotation.comments[0]["body"])
-            except Exception as e: QMessageBox.critical(self, "Load Error", f"Failed to parse annotation: {e}"); return None
-        if hasattr(self.parent(), "annotation_manager") and any(v for v in self.parent().annotation_manager.default_labels.values()):
-            d = self.parent().annotation_manager.default_labels
-            return [ {"category": CAT_POSTURE, "selectedValue": d["posture"]}, {"category": CAT_HLB, "selectedValue": d["hlb"]}, {"category": CAT_PA, "selectedValue": d["pa_type"]}, {"category": CAT_BP, "selectedValue": d["behavioral_params"]}, {"category": CAT_ES, "selectedValue": d["exp_situation"]}, {"category": CAT_NOTES, "selectedValue": d["special_notes"]} ]
+            try:
+                return json.loads(annotation.comments[0]["body"])
+            except Exception as e:
+                QMessageBox.critical(self, "Load Error", f"Failed to parse annotation: {e}")
+                return None
+        elif hasattr(self.parent(), "annotation_manager") and hasattr(self.parent().annotation_manager, "last_used_labels"):
+            d = self.parent().annotation_manager.last_used_labels
+            if any(v for k, v in d.items() if k != "special_notes" or v):
+                return [
+                    {"category": CAT_POSTURE, "selectedValue": d["posture"]},
+                    {"category": CAT_HLB, "selectedValue": d["hlb"]},
+                    {"category": CAT_PA, "selectedValue": d["pa_type"]},
+                    {"category": CAT_BP, "selectedValue": d["behavioral_params"]},
+                    {"category": CAT_ES, "selectedValue": d["exp_situation"]},
+                    {"category": CAT_NOTES, "selectedValue": d.get("special_notes", "")}
+                ]
         return None
 
     def _set_values_from_data(self, data):
@@ -537,14 +549,16 @@ class AnnotationDialog(QDialog):
         if 0 <= index < len(category_combos): category_combos[index].showPopup()
     def load_mappings(self):
         try:
-            with open('data/mapping/mapping.json', 'r') as f: self.mappings = json.load(f)
+            path = resource_path('data/mapping/mapping.json')
+            with open(path, 'r') as f: self.mappings = json.load(f)
             self.mappings['HLB_to_PA'] = defaultdict(list); [self.mappings['HLB_to_PA'][hlb].append(pa) for pa, hlb in self.mappings.get('PA_to_HLB', {}).items()]
             self.mappings['POS_to_PA'] = defaultdict(list); [[self.mappings['POS_to_PA'][pos].append(pa) for pos in postures] for pa, postures in self.mappings.get('PA_to_POS', {}).items()]
             return True
         except Exception as e: QMessageBox.critical(self, "Config Error", f"Could not load mapping.json:\n{e}"); return False
     def load_categories(self):
         try:
-            with open('data/categories/categories.csv', 'r') as f:
+            path = resource_path('data/categories/categories.csv')
+            with open(path, 'r') as f:
                 categories = defaultdict(list); [categories[cat].append(val) for row in csv.DictReader(f) for cat, val in row.items() if val]
                 self.full_categories = { CAT_POSTURE: ["Posture_Unlabeled"] + categories[CAT_POSTURE], CAT_HLB: ["HLB_Unlabeled"] + categories[CAT_HLB], CAT_PA: ["PA_Type_Unlabeled"] + categories[CAT_PA], CAT_BP: ["CP_Unlabeled"] + categories[CAT_BP], CAT_ES: ["ES_Unlabeled"] + categories[CAT_ES] }
             return True

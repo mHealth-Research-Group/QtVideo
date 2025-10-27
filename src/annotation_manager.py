@@ -1,19 +1,23 @@
 from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import QTimer
 from src.dialogs import AnnotationDialog
 from src.models import TimelineAnnotation
 import random
+import json
 from src.utils import autosave
 
 class AnnotationManager:
     def __init__(self, app):
         self.app = app
-        self.default_labels = {
+        self.last_used_labels = {
             "posture": "",
             "hlb": [],
             "pa_type": "",
-            "behavioral_params": [], "exp_situation": "", "special_notes": ""
+            "behavioral_params": [],
+            "exp_situation": "",
+            "special_notes": ""
         }
-        self.posture_colors = {} # Cache for consistent posture colors
+        self.posture_colors = {}
 
     def get_posture_color(self, posture):
         if posture is None or posture == "":
@@ -49,11 +53,33 @@ class AnnotationManager:
             tolerance = 0.001
             if (annotation.start_time - tolerance) <= current_time <= (annotation.end_time + tolerance):
                 return i
-        return -1 # Return -1 if no annotation contains the current time
+        return -1
+
+    def _get_labels_from_annotation(self, annotation):
+        if not annotation or not annotation.comments:
+            return {"POSTURE": None, "HIGH LEVEL BEHAVIOR": [], "PA TYPE": None}
+        try:
+            body_data = json.loads(annotation.comments[0].get("body", "[]"))
+            data_map = {item.get("category"): item.get("selectedValue") for item in body_data}
+            return {
+                "POSTURE": data_map.get("POSTURE"),
+                "HIGH LEVEL BEHAVIOR": sorted(data_map.get("HIGH LEVEL BEHAVIOR", [])),
+                "PA TYPE": data_map.get("PA TYPE")
+            }
+        except json.JSONDecodeError:
+            return {"POSTURE": None, "HIGH LEVEL BEHAVIOR": [], "PA TYPE": None}
+
+    def _annotations_have_different_labels(self, ann1, ann2):
+        labels1 = self._get_labels_from_annotation(ann1)
+        labels2 = self._get_labels_from_annotation(ann2)
+        return (labels1["POSTURE"] != labels2["POSTURE"] or
+                labels1["HIGH LEVEL BEHAVIOR"] != labels2["HIGH LEVEL BEHAVIOR"] or
+                labels1["PA TYPE"] != labels2["PA TYPE"])
+
 
     @autosave
     def toggleAnnotation(self):
-        current_time = self.app.media_player['_position'] / 1000.0 
+        current_time = self.app.media_player['_position'] / 1000.0
 
         if self.app.current_annotation is None:
             if self.check_overlap(current_time, current_time):
@@ -62,8 +88,10 @@ class AnnotationManager:
                 return
 
             self.app.current_annotation = TimelineAnnotation(start_time=current_time)
-            self.app.current_annotation.update_comment_body(**self.default_labels)
-            print(f"Started annotation at {current_time:.3f}s")
+            temp_labels = self.last_used_labels.copy()
+            temp_labels["special_notes"] = ""
+            self.app.current_annotation.update_comment_body(**temp_labels)
+            print(f"Started annotation at {current_time:.3f}s with last used labels")
             self.app.updateAnnotationTimeline()
 
         else:
@@ -79,14 +107,27 @@ class AnnotationManager:
                 return
 
             self.app.current_annotation.end_time = current_time
+
+            try:
+                if self.app.current_annotation.comments:
+                    body_data = json.loads(self.app.current_annotation.comments[0].get("body", "[]"))
+                    data_map = {item.get("category"): item.get("selectedValue") for item in body_data}
+                    self.last_used_labels = {
+                        "posture": data_map.get("POSTURE", ""),
+                        "hlb": data_map.get("HIGH LEVEL BEHAVIOR", []),
+                        "pa_type": data_map.get("PA TYPE", ""),
+                        "behavioral_params": data_map.get("Behavioral Parameters", []),
+                        "exp_situation": data_map.get("Experimental situation", ""),
+                        "special_notes": ""
+                    }
+            except json.JSONDecodeError as e:
+                print(f"Error decoding comment body for storing last labels: {e}")
+
+
             self.app.annotations.append(self.app.current_annotation)
             self.app.annotations.sort(key=lambda x: x.start_time)
             print(f"Finished annotation: {start_time:.3f}s - {current_time:.3f}s")
             self.app.current_annotation = None
-            self.default_labels = {
-                "posture": "", "hlb": [], "pa_type": "",
-                "behavioral_params": [], "exp_situation": "", "special_notes": ""
-            }
             self.app.updateAnnotationTimeline()
 
 
@@ -116,10 +157,13 @@ class AnnotationManager:
 
             if target_annotation:
                 target_annotation.update_comment_body(**label_data)
+                self.last_used_labels = label_data.copy()
+                self.last_used_labels["special_notes"] = ""
                 print(f"Updated labels for annotation: {target_annotation.start_time:.3f}s")
                 self.app.updateAnnotationTimeline()
             else:
-                self.default_labels.update(label_data)
+                self.last_used_labels = label_data.copy()
+                self.last_used_labels["special_notes"] = ""
                 print("Updated default labels for next annotation.")
 
     @autosave
@@ -127,15 +171,10 @@ class AnnotationManager:
         if self.app.current_annotation is not None:
             print("Canceled annotation creation.")
             self.app.current_annotation = None
-            self.default_labels = {
-                "posture": "", "hlb": [], "pa_type": "",
-                "behavioral_params": [], "exp_situation": "", "special_notes": ""
-            }
-            self.app.updateAnnotationTimeline() 
+            self.app.updateAnnotationTimeline()
 
     @autosave
     def deleteCurrentLabel(self):
-        """Delete the annotation segment at the current timeline position."""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_idx = self.get_current_annotation_index(sorted_annotations)
 
@@ -147,12 +186,16 @@ class AnnotationManager:
                                            QMessageBox.StandardButton.No)
 
             if confirm == QMessageBox.StandardButton.Yes:
-                try:
-                    self.app.annotations.remove(annotation_to_delete)
+                annotation_id_to_delete = annotation_to_delete.id
+                initial_length = len(self.app.annotations)
+                self.app.annotations = [ann for ann in self.app.annotations if ann.id != annotation_id_to_delete]
+
+                if len(self.app.annotations) < initial_length:
                     self.app.updateAnnotationTimeline()
-                    print(f"Deleted annotation: {annotation_to_delete.start_time:.2f}s - {annotation_to_delete.end_time:.2f}s")
-                except ValueError:
-                     print("Error: Annotation to delete not found in main list.")
+                    print(f"Deleted annotation: {annotation_to_delete.start_time:.2f}s - {annotation_to_delete.end_time:.2f}s (ID: {annotation_id_to_delete})")
+                else:
+                    print(f"Error: Annotation with ID {annotation_id_to_delete} not found in main list for deletion.")
+
         else:
              QMessageBox.information(self.app, "Delete Label", "The playback position is not currently inside any annotation.")
 
@@ -166,7 +209,7 @@ class AnnotationManager:
 
         current_time = self.app.media_player['_position'] / 1000.0
         target_time = -1
-        tolerance = 0.05 
+        tolerance = 0.05
 
         for point in reversed(boundary_points):
             if point < current_time - tolerance:
@@ -198,14 +241,13 @@ class AnnotationManager:
 
     @autosave
     def mergeWithPrevious(self):
-        """Merge the annotation at the current position with the previous one if adjacent."""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_idx = self.get_current_annotation_index(sorted_annotations)
         print("Current index of annotation being merged:", current_idx, sorted_annotations[current_idx] if current_idx != -1 else None)
         if current_idx == -1:
             QMessageBox.information(self.app, "Merge Failed", "Cannot merge: No annotation at the current position.")
             return
-        
+
         if current_idx == 0:
             QMessageBox.information(self.app, "Merge Failed", "Cannot merge: No previous annotation exists.")
             return
@@ -217,6 +259,15 @@ class AnnotationManager:
             QMessageBox.warning(self.app, "Invalid Merge", f"Cannot merge: Annotations are not adjacent (Gap: {gap:.3f}s).")
             return
 
+        if self._annotations_have_different_labels(prev_annotation, current_annotation):
+            reply = QMessageBox.question(self.app, "Label Conflict",
+                                         "The labels for these adjacent annotations differ.\nMerging will use the labels from the current annotation (the later one).\n\nDo you want to proceed?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                                         QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Cancel:
+                print("Merge cancelled due to label conflict.")
+                return
+
         merged_annotation = TimelineAnnotation(
             start_time=prev_annotation.start_time,
             end_time=current_annotation.end_time
@@ -227,12 +278,9 @@ class AnnotationManager:
             merged_annotation.copy_comments_from(prev_annotation)
 
         try:
-            for annotation in [current_annotation, prev_annotation]:
-                for i in range(len(self.app.annotations)):
-                    if self.app.annotations[i].id == annotation.id:
-                        print("Removing annotation during merge:", self.app.annotations[i])
-                        del self.app.annotations[i]
-                        break
+            annotations_to_remove_ids = {current_annotation.id, prev_annotation.id}
+            self.app.annotations = [ann for ann in self.app.annotations if ann.id not in annotations_to_remove_ids]
+
         except ValueError:
              print("Error: Could not remove original annotations during merge.")
              return
@@ -244,7 +292,6 @@ class AnnotationManager:
 
     @autosave
     def mergeWithNext(self):
-        """Merge the annotation at the current position with the next one if adjacent."""
         sorted_annotations = sorted(self.app.annotations, key=lambda x: x.start_time)
         current_idx = self.get_current_annotation_index(sorted_annotations)
         if current_idx == -1 or current_idx >= len(sorted_annotations) - 1:
@@ -259,6 +306,16 @@ class AnnotationManager:
             QMessageBox.warning(self.app, "Invalid Merge", f"Cannot merge: Annotations are not adjacent (Gap: {gap:.3f}s).")
             return
 
+        if self._annotations_have_different_labels(current_annotation, next_annotation):
+            reply = QMessageBox.question(self.app, "Label Conflict",
+                                         "The labels for these adjacent annotations differ.\nMerging will use the labels from the current annotation (the earlier one).\n\nDo you want to proceed?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                                         QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Cancel:
+                print("Merge cancelled due to label conflict.")
+                return
+
+
         merged_annotation = TimelineAnnotation(
             start_time=current_annotation.start_time,
             end_time=next_annotation.end_time
@@ -270,12 +327,8 @@ class AnnotationManager:
             merged_annotation.copy_comments_from(next_annotation)
 
         try:
-            for annotation in [current_annotation, next_annotation]:
-                for i in range(len(self.app.annotations)):
-                    if self.app.annotations[i].id == annotation.id:
-                        print("Removing annotation during merge:", self.app.annotations[i])
-                        del self.app.annotations[i]
-                        break
+            annotations_to_remove_ids = {current_annotation.id, next_annotation.id}
+            self.app.annotations = [ann for ann in self.app.annotations if ann.id not in annotations_to_remove_ids]
         except ValueError:
              print("Error: Could not remove original annotations during merge.")
              return
