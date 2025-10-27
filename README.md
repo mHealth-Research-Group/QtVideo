@@ -39,20 +39,20 @@ python main.py
 
 ### Basic Workflow
 
-1. **Open Video**: Click "Open Video" or use the gear menu í "New Video"
+1. **Open Video**: Click "Open Video" or use the gear menu ÔøΩ "New Video"
 2. **Create Annotation**: Press `A` to start labeling at current position, press `A` again to finish
 3. **Edit Labels**: Press `G` to open the category selection dialog
 4. **Navigate**: Use arrow keys to skip through video, or Shift+Arrow to jump between labels
-5. **Export**: Use gear menu í "Export Labels" to save annotations
+5. **Export**: Use gear menu ÔøΩ "Export Labels" to save annotations
 
 ### Keyboard Shortcuts
 
 #### Video Controls
 - `Spacebar` - Play/Pause
-- `ê/í` - Skip 10s backward/forward
-- `ë/ì` - Increase/decrease playback speed
+- `ÔøΩ/ÔøΩ` - Skip 10s backward/forward
+- `ÔøΩ/ÔøΩ` - Increase/decrease playback speed
 - `R` - Reset speed to 1.0x
-- `Shift+ë/ì` - Adjust preview skip offset
+- `Shift+ÔøΩ/ÔøΩ` - Adjust preview skip offset
 
 #### Annotation Controls
 - `A` - Start/Stop labeling
@@ -62,7 +62,7 @@ python main.py
 - `P` - Split label at current position
 
 #### Navigation
-- `Shift+ê/í` - Jump to previous/next label boundary
+- `Shift+ÔøΩ/ÔøΩ` - Jump to previous/next label boundary
 - `N` - Merge with previous label
 - `M` - Merge with next label
 
@@ -114,14 +114,31 @@ pytest -v
 pytest tests/test_video_player.py
 ```
 
-## Development
+## Citation
 
-See [CLAUDE.md](CLAUDE.md) for detailed architecture documentation and development guidelines.
+If you use this software in your research, please cite:
 
-## License
+Tran, H., Potter, V., Mazzucchelli, U., John, D., Intille, S. (2026). Towards Practical, Best Practice Video Annotation to Support Human Activity Recognition. In: Tonkin, E.L., Tourte, G.J.L., Yordanova, K. (eds) Annotation of Real-World Data for Artificial Intelligence Systems. ARDUOUS 2025. Communications in Computer and Information Science, vol 2706. Springer, Cham. https://doi.org/10.1007/978-3-032-09117-8_6
 
-[Add your license information here]
+We also provide our citation as a bibtex:
 
-## Contributors
-
-[Add contributor information here]
+```bibtex
+@InProceedings{10.1007/978-3-032-09117-8_6,
+author="Tran, Hoan
+and Potter, Veronika
+and Mazzucchelli, Umberto
+and John, Dinesh
+and Intille, Stephen",
+editor="Tonkin, Emma L.
+and Tourte, Gregory J. L.
+and Yordanova, Kristina",
+title="Towards Practical, Best Practice Video Annotation to Support Human Activity Recognition",
+booktitle="Annotation of Real-World Data for Artificial Intelligence Systems",
+year="2026",
+publisher="Springer Nature Switzerland",
+address="Cham",
+pages="94--118",
+abstract="Researchers need ground-truth activity annotations to train and evaluate wearable-sensor-based activity recognition models. Oftentimes, researchers establish ground truth by annotating the video recorded while someone engages in activity wearing sensors. The ``gold-standard'' video annotation practice requires two trained annotators independently annotating the same footage with a third domain expert resolving disagreements. Such annotation is laborious, and so widely-used datasets have often been annotated using only a single annotator per video. Because the research community is moving towards collecting data of more complex behaviors from free-living people 24/7 and annotating more granular, fleeting activities, the annotation task grows even more challenging; the single-annotator approach may yield inaccuracies. We investigated a ``silver-standard'' approach: rather than using two independent annotation passes, a second annotator revises the work of the first annotator. The proposed approach reduced the total annotation time by 33{\%} compared to the gold-standard approach, with near-equivalent annotation quality. The silver-standard label was in higher agreement with the gold-standard label than the single-annotator label, with Cohen's {\$}{\$}{\backslash}kappa {\$}{\$}$\kappa$of 0.77 and 0.68 respectively on a 16.4 h video. The silver-standard labels also had higher inter-rater reliability than the single-annotator labels, with the respective mean Cohen's {\$}{\$}{\backslash}kappa {\$}{\$}$\kappa$across six videos (92 h of total footage) of 0.79 and 0.68.",
+isbn="978-3-032-09117-8"
+}
+```
