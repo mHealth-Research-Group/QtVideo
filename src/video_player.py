@@ -27,7 +27,7 @@ class VideoPlayerApp(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Video Annotator")
+        self.setWindowTitle("PAAWS Annotation Software")
         screen = QGuiApplication.primaryScreen()
         if screen:
             available_geometry = screen.availableGeometry()

@@ -30,7 +30,7 @@ jobs:
 
         # Base PyInstaller arguments using bash array
         PYINSTALLER_ARGS=(
-          --name qtwebscrub
+          --name "PAAWS-Annotation-Software"
           --windowed
           --onefile
           --add-data "src/VideoPlayer.qml;src" # Windows uses ';' separator for paths
@@ -70,7 +70,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: windows-exe
-        path: dist/qtwebscrub.exe
+        path: dist/PAAWS-Annotation-Software.exe
 
   build-macos-arm:
     runs-on: macos-14
@@ -93,7 +93,7 @@ jobs:
 
         # Base PyInstaller arguments using bash array
         PYINSTALLER_ARGS=(
-          --name qtwebscrub
+          --name "PAAWS-Annotation-Software"
           --windowed
           --onedir
           --add-data "src/VideoPlayer.qml:src" # macOS uses ':' separator for paths
@@ -134,12 +134,12 @@ jobs:
         brew install create-dmg
     - name: Create DMG
       run: |
-        create-dmg --volname "QTWebScrub" --window-pos 200 120 --window-size 600 300 --icon-size 100 --app-drop-link 425 120 "dist/QTWebScrub.dmg" "dist/qtwebscrub.app"
+        create-dmg --volname "PAAWS Annotation Software" --window-pos 200 120 --window-size 600 300 --icon-size 100 --app-drop-link 425 120 "dist/PAAWS-Annotation-Software.dmg" "dist/PAAWS-Annotation-Software.app"
     - name: Upload macOS artifact
       uses: actions/upload-artifact@v4
       with:
         name: macos-arm-dmg
-        path: dist/QTWebScrub.dmg
+        path: dist/PAAWS-Annotation-Software.dmg
 
   build-linux:
     runs-on: ubuntu-latest
@@ -167,7 +167,7 @@ jobs:
 
         # Base PyInstaller arguments using bash array
         PYINSTALLER_ARGS=(
-          --name qtwebscrub
+          --name "PAAWS-Annotation-Software"
           --windowed
           --onefile
           --add-data "src/VideoPlayer.qml:src" # Linux uses ':' separator for paths
@@ -211,4 +211,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: linux-bin
-        path: dist/qtwebscrub
+        path: dist/PAAWS-Annotation-Software

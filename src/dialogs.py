@@ -11,8 +11,8 @@ from PyQt6.QtGui import QKeyEvent
 from src.utils import resource_path
 
 # Constants
-APP_NAME = "AnnotationTool"
-ORGANIZATION_NAME = "MyOrg"
+APP_NAME = "PAAWS-Annotation-Software"
+ORGANIZATION_NAME = "PAAWS"
 SETTINGS_DISABLE_ALERTS = "disableAlerts"
 
 CAT_POSTURE = "POSTURE"

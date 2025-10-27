@@ -50,7 +50,7 @@ def app(qtbot, monkeypatch):
 
 def test_initialization(app):
     assert app is not None
-    assert app.windowTitle() == "Video Annotator"
+    assert app.windowTitle() == "PAAWS Annotation Software"
     assert app.autosave_manager is not None
     assert app.annotation_manager is not None
     assert app.shortcut_manager is not None
