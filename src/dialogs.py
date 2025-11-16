@@ -292,12 +292,6 @@ class AnnotationDialog(QDialog):
         if initial_data:
             self._set_values_from_data(initial_data)
 
-        initial_errors = self._get_validation_errors()
-        if initial_errors:
-            self.show_all_checkbox.setChecked(True)
-            print("Loaded incompatible data, enabling 'Show all options' automatically.")
-
-        self.show_all_checkbox.stateChanged.connect(self._on_settings_change)
         self.disable_alerts_checkbox.stateChanged.connect(self._on_settings_change)
 
         self.pa_selection.selectionChanged.connect(self._update_filters)
@@ -308,7 +302,6 @@ class AnnotationDialog(QDialog):
         self.hlb_selection.userMadeSelection.connect(self._handle_user_validation)
         self.posture_selection.userMadeSelection.connect(self._handle_user_validation)
 
-        self._update_filters()
         self._run_validation_check(is_initial_load=True)
 
     def _init_ui(self):
@@ -317,10 +310,9 @@ class AnnotationDialog(QDialog):
         main_layout = QVBoxLayout(main_widget); main_layout.setSpacing(24); main_layout.setContentsMargins(24, 24, 24, 24)
         
         options_layout = QHBoxLayout()
-        self.show_all_checkbox = QCheckBox("Show all options (allows incompatible selections)")
         self.disable_alerts_checkbox = QCheckBox("Disable all pop-up warnings")
         self.disable_alerts_checkbox.setChecked(self.settings.value(SETTINGS_DISABLE_ALERTS, False, type=bool))
-        options_layout.addWidget(self.show_all_checkbox); options_layout.addStretch(); options_layout.addWidget(self.disable_alerts_checkbox)
+        options_layout.addStretch(); options_layout.addWidget(self.disable_alerts_checkbox)
         main_layout.addLayout(options_layout)
         
         grid = QGridLayout(); grid.setSpacing(16); grid.setColumnMinimumWidth(0, 220); grid.setColumnStretch(1, 2)
@@ -429,74 +421,35 @@ class AnnotationDialog(QDialog):
 
     def _on_settings_change(self):
         self.settings.setValue(SETTINGS_DISABLE_ALERTS, self.disable_alerts_checkbox.isChecked())
-        self._update_filters()
         self._run_validation_check()
 
     def _handle_user_validation(self):
-        if self.show_all_checkbox.isChecked() and not self.disable_alerts_checkbox.isChecked():
+        if not self.disable_alerts_checkbox.isChecked():
             errors = self._get_validation_errors()
             if errors:
                 error_messages = []
-                if CAT_POSTURE in errors: error_messages.append(f"Posture '{errors[CAT_POSTURE][0]}' is incompatible.")
-                if CAT_HLB in errors: error_messages.append(f"HLB(s) {', '.join(errors[CAT_HLB])} are incompatible.")
-                msg = "A potential mismatch has been detected:\n\n" + "\n".join(f"- {e}" for e in error_messages)
-                QMessageBox.warning(self, "Potential Mismatch", msg)
+                if CAT_POSTURE in errors: error_messages.append(f"Posture '{errors[CAT_POSTURE][0]}' is incompatible with the selected PA Type.")
+                if CAT_HLB in errors: error_messages.append(f"HLB(s) {', '.join(errors[CAT_HLB])} are incompatible with the selected PA Type.")
+                msg = "⚠️ Incompatible selection detected:\n\n" + "\n".join(f"• {e}" for e in error_messages) + "\n\nYou can still save this annotation, but please verify the selection is correct."
+                QMessageBox.warning(self, "Incompatible Selection", msg)
     
     def _update_filters(self):
-        if self.show_all_checkbox.isChecked():
-            self._update_combo_items(self.pa_combo, self.full_categories[CAT_PA])
-            self._update_combo_items(self.hlb_combo, self.full_categories[CAT_HLB])
-            self._update_combo_items(self.posture_combo, self.full_categories[CAT_POSTURE])
-        else:
-            self._apply_filters()
+        # Always show all options - no filtering
         self._run_validation_check()
-
-    def _apply_filters(self):
-        selected_pa = self.pa_selection.selected_values[0]
-        selected_hlbs = []
-        for h in self.hlb_selection.selected_values:
-            if h != self.hlb_selection.unlabeled_text:
-                selected_hlbs.append(h)
-        selected_posture = self.posture_selection.selected_values[0]
-
-        all_pas = self.full_categories[CAT_PA]
-        if len(selected_hlbs) == 1:
-            pas_for_hlb = set(self.mappings['HLB_to_PA'].get(selected_hlbs[0], all_pas))
-        else:
-            pas_for_hlb = set(all_pas)
-        pas_for_posture = set(self.mappings['POS_to_PA'].get(selected_posture, all_pas))
-        permissible_pas = sorted(list(pas_for_hlb.intersection(pas_for_posture)))
-        permissible_pas.insert(0, all_pas[0])
-
-        all_hlbs = self.full_categories[CAT_HLB]
-        mapped_hlb = self.mappings['PA_to_HLB'].get(selected_pa)
-        if mapped_hlb:
-            permissible_hlb = [all_hlbs[0], mapped_hlb]
-        else:
-            permissible_hlb = all_hlbs
-
-        all_postures = self.full_categories[CAT_POSTURE]
-        mapped_postures = self.mappings['PA_to_POS'].get(selected_pa, all_postures)
-        permissible_postures = [all_postures[0]] + sorted([p for p in mapped_postures if p != all_postures[0]])
-
-        self._update_combo_items(self.pa_combo, permissible_pas, self.pa_selection)
-        self._update_combo_items(self.hlb_combo, permissible_hlb, self.hlb_selection)
-        self._update_combo_items(self.posture_combo, permissible_postures, self.posture_selection)
 
     def _run_validation_check(self, is_initial_load=False):
         self._clear_all_invalid_styles()
         errors = self._get_validation_errors()
         if not errors: return
         
-        if is_initial_load:
-            error_messages = []
-            if CAT_POSTURE in errors: error_messages.append(f"Posture '{errors[CAT_POSTURE][0]}' is incompatible.")
-            if CAT_HLB in errors: error_messages.append(f"HLB(s) {', '.join(errors[CAT_HLB])} are incompatible.")
-            msg = "The loaded annotation has incompatible values:\n\n" + "\n".join(f"- {e}" for e in error_messages)
-            QMessageBox.warning(self, "Incompatible Annotation", msg)
+        self._apply_invalid_styles(errors)
         
-        if self.disable_alerts_checkbox.isChecked() or is_initial_load:
-            self._apply_invalid_styles(errors)
+        if is_initial_load and not self.disable_alerts_checkbox.isChecked():
+            error_messages = []
+            if CAT_POSTURE in errors: error_messages.append(f"Posture '{errors[CAT_POSTURE][0]}' is incompatible with the selected PA Type.")
+            if CAT_HLB in errors: error_messages.append(f"HLB(s) {', '.join(errors[CAT_HLB])} are incompatible with the selected PA Type.")
+            msg = "⚠️ The loaded annotation has incompatible values:\n\n" + "\n".join(f"• {e}" for e in error_messages) + "\n\nYou can still save this annotation, but please verify the selection is correct."
+            QMessageBox.warning(self, "Incompatible Annotation", msg)
             
     def _get_validation_errors(self):
         errors = defaultdict(list)
@@ -566,16 +519,6 @@ class AnnotationDialog(QDialog):
     def _populate_combos(self):
         self.posture_combo.addItems(self.full_categories[CAT_POSTURE]); self.hlb_combo.addItems(self.full_categories[CAT_HLB]); self.pa_combo.addItems(self.full_categories[CAT_PA]); self.bp_combo.addItems(self.full_categories[CAT_BP]); self.es_combo.addItems(self.full_categories[CAT_ES])
         self.posture_selection.set_unlabeled_text(self.full_categories[CAT_POSTURE][0]); self.hlb_selection.set_unlabeled_text(self.full_categories[CAT_HLB][0]); self.pa_selection.set_unlabeled_text(self.full_categories[CAT_PA][0]); self.bp_selection.set_unlabeled_text(self.full_categories[CAT_BP][0]); self.es_selection.set_unlabeled_text(self.full_categories[CAT_ES][0])
-    def _update_combo_items(self, combo, new_items, selection_widget=None):
-        combo.blockSignals(True)
-        current_val = selection_widget.selected_values[0] if selection_widget and not selection_widget.multi_select and selection_widget.selected_values else combo.currentText()
-        combo.clear(); combo.addItems(new_items)
-        if current_val in new_items: combo.setCurrentText(current_val)
-        else:
-            if selection_widget and not selection_widget.multi_select:
-                selection_widget.set_values([new_items[0]])
-                QMessageBox.information(self, "Selection Reset", f"'{current_val}' was reset due to incompatibility.")
-        combo.blockSignals(False)
     def _get_stylesheet(self):
         return """
             QWidget { background-color: #1e1e1e; color: #ffffff; font-size: 13px; }
@@ -583,7 +526,31 @@ class AnnotationDialog(QDialog):
             QLabel[category="true"] { padding: 8px 12px; background-color: #3d3d3d; border-radius: 4px; font-weight: bold; }
             QWidget#notesContainer { background-color: #2a2a2a; border-radius: 4px; padding: 12px; }
             QLabel#notesSublabel { color: #888888; font-size: 12px; padding: 4px 0; }
-            QCheckBox { spacing: 8px; }
+            QCheckBox { 
+                spacing: 8px; 
+                color: #ffffff;
+                font-size: 13px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #3d3d3d;
+                border-radius: 3px;
+                background-color: #2d2d2d;
+            }
+            QCheckBox::indicator:hover {
+                border-color: #2b79ff;
+                background-color: #3d3d3d;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #2b79ff;
+                border-color: #2b79ff;
+                image: url(none);
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #3d8aff;
+                border-color: #3d8aff;
+            }
             QComboBox { background-color: #2d2d2d; border: 1px solid #3d3d3d; border-radius: 4px; padding: 8px 12px; min-width: 400px; }
             QWidget[invalid="true"] > QComboBox { border: 1px solid #e53935; }
             QLineEdit { padding: 10px; background-color: #2d2d2d; border: 1px solid #3d3d3d; border-radius: 4px; }
